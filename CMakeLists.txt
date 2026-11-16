@@ -147,14 +147,12 @@ target_link_libraries(sonolint-host
         juce::juce_recommended_config_flags
         juce::juce_recommended_warning_flags
     PRIVATE
-        juce::juce_audio_processors
+        juce::juce_audio_processors_headless   # hosting without JUCE's GUI modules (docs/adr/0016)
 )
 
 target_compile_definitions(sonolint-host
     PUBLIC
         JUCE_PLUGINHOST_VST3=1
-        JUCE_WEB_BROWSER=0
-        JUCE_USE_CURL=0
     INTERFACE
         $<TARGET_PROPERTY:sonolint-host,COMPILE_DEFINITIONS>
 )

@@ -38,8 +38,6 @@ message thread. Sonolint never runs a message loop.
 Windows, Heft's own CI has rendered it this way with HeftMeasure, and Sonolint's CI
 loads Heft there without a message loop.
 
-**Open question: the headless module.** JUCE 9 can host plugins without its GUI
-modules. In the spike `juce_audio_processors_headless` gave the same audio, compiled
-in 17 s of CPU time instead of 97 s, and produced a 2.7 MB binary instead of 10.7 MB
-(one architecture). `sonolint-host` links `juce_audio_processors` for now; switching
-would be a decision of its own.
+**The headless module.** JUCE 9 can host plugins without its GUI modules, and in the
+spike `juce_audio_processors_headless` gave the same audio. Switching to it is
+decision [0016](0016-headless-hosting-module.md).

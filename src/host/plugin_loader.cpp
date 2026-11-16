@@ -2,7 +2,7 @@
 
 #include "core/error.h"
 
-#include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_audio_processors_headless/juce_audio_processors_headless.h>
 
 namespace sonolint
 {
@@ -28,8 +28,10 @@ PluginInfo inspectPlugin (const std::filesystem::path& path)
     if (! std::filesystem::exists (path))
         throw Error (ErrorCode::pluginLoad, "plugin not found: " + pathText);
 
+    // The headless format was only tried with Heft. If a third-party plugin doesn't load,
+    // try juce::VST3PluginFormat (module juce_audio_processors) first: docs/adr/0016.
     juce::AudioPluginFormatManager manager;
-    manager.addFormat (std::make_unique<juce::VST3PluginFormat>());
+    manager.addFormat (std::make_unique<juce::VST3PluginFormatHeadless>());
 
     juce::OwnedArray<juce::PluginDescription> types;
     manager.getFormat (0)->findAllTypesForFile (types, juce::String::fromUTF8 (pathText.data(), (int) pathText.size()));
