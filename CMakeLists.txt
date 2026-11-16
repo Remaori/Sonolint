@@ -139,9 +139,9 @@ FetchContent_Declare(CLI11
 FetchContent_MakeAvailable(JUCE CLI11)
 
 # --- sonolint-host: loads the VST3 and renders audio through it, with JUCE -----
-add_library(sonolint-host STATIC
-    src/host/plugin_loader.cpp
-)
+file(GLOB SONOLINT_HOST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/host/*.cpp")
+
+add_library(sonolint-host STATIC ${SONOLINT_HOST_SOURCES})
 
 # The JUCE modules are compiled into this library once. Whoever links it gets its
 # definitions and include paths, so JUCE headers mean the same thing everywhere.
