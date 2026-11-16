@@ -75,9 +75,10 @@ add_library(dr_libs INTERFACE)
 target_include_directories(dr_libs SYSTEM INTERFACE "${dr_libs_SOURCE_DIR}")
 
 # --- sonolint-core: signals, metrics, comparison and reports. No JUCE. ---------
-add_library(sonolint-core STATIC
-    src/core/report/param_list.cpp
-)
+# Every .cpp under src/core/ belongs to the library; a new file needs no change here.
+file(GLOB_RECURSE SONOLINT_CORE_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/core/*.cpp")
+
+add_library(sonolint-core STATIC ${SONOLINT_CORE_SOURCES})
 
 target_include_directories(sonolint-core PUBLIC src)
 
@@ -99,9 +100,9 @@ else()
 endif()
 
 # --- Unit tests of the core -----------------------------------------------------
-add_executable(sonolint-tests
-    tests/unit/param_list_test.cpp
-)
+file(GLOB SONOLINT_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/*.cpp")
+
+add_executable(sonolint-tests ${SONOLINT_TEST_SOURCES})
 
 target_link_libraries(sonolint-tests
     PRIVATE

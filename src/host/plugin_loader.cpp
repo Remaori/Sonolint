@@ -1,6 +1,7 @@
 #include "host/plugin_loader.h"
 
 #include "core/error.h"
+#include "core/io/path_text.h"
 
 #include <juce_audio_processors_headless/juce_audio_processors_headless.h>
 
@@ -13,12 +14,6 @@ namespace
 constexpr double kSampleRate = 48000.0;
 constexpr int    kBlockSize  = 512;
 constexpr int    kMaxTextLength = 128;
-
-std::string toUtf8 (const std::filesystem::path& path)
-{
-    const auto text = path.u8string();
-    return { text.begin(), text.end() };
-}
 } // namespace
 
 PluginInfo inspectPlugin (const std::filesystem::path& path)
