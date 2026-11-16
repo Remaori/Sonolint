@@ -1,0 +1,67 @@
+{
+    "version": 6,
+    "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+    "configurePresets": [
+        {
+            "name": "windows",
+            "displayName": "Windows x64 (Visual Studio)",
+            "description": "Newest Visual Studio found, 64-bit, build folder ./build",
+            "binaryDir": "${sourceDir}/build",
+            "architecture": {
+                "value": "x64",
+                "strategy": "set"
+            },
+            "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+        },
+        {
+            "name": "macos",
+            "displayName": "macOS universal (Ninja)",
+            "description": "Release, arm64 + x86_64 in one binary, build folder ./build",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_OSX_ARCHITECTURES": "arm64;x86_64",
+                "CMAKE_OSX_DEPLOYMENT_TARGET": "13.3"
+            },
+            "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin" }
+        }
+    ],
+    "buildPresets": [
+        { "name": "windows", "configurePreset": "windows", "configuration": "Release" },
+        { "name": "macos", "configurePreset": "macos" }
+    ],
+    "testPresets": [
+        {
+            "name": "windows",
+            "configurePreset": "windows",
+            "configuration": "Release",
+            "output": { "outputOnFailure": true }
+        },
+        {
+            "name": "macos",
+            "configurePreset": "macos",
+            "output": { "outputOnFailure": true }
+        }
+    ],
+    "workflowPresets": [
+        {
+            "name": "windows",
+            "displayName": "Windows x64: configure, build and test",
+            "steps": [
+                { "type": "configure", "name": "windows" },
+                { "type": "build", "name": "windows" },
+                { "type": "test", "name": "windows" }
+            ]
+        },
+        {
+            "name": "macos",
+            "displayName": "macOS universal: configure, build and test",
+            "steps": [
+                { "type": "configure", "name": "macos" },
+                { "type": "build", "name": "macos" },
+                { "type": "test", "name": "macos" }
+            ]
+        }
+    ]
+}

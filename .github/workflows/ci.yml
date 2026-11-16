@@ -1,0 +1,87 @@
+# Builds and tests Sonolint on every push to main and on pull requests: the whole
+# tool on Windows and macOS, and sonolint-core alone on Linux, where JUCE is never
+# downloaded (that job is what proves the core doesn't depend on it).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Windows x64
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache the downloaded dependencies
+        uses: actions/cache@v6
+        with:
+          path: build/_deps
+          key: deps-${{ runner.os }}-${{ hashFiles('CMakeLists.txt') }}
+
+      - name: Configure, build and test
+        shell: pwsh
+        run: ./build.ps1
+
+      # A real plugin built somewhere else: the latest published release of Heft.
+      - name: List the parameters of Heft
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download --repo Remaori/Heft --pattern '*.zip' --dir heft
+          Expand-Archive -Path heft/*.zip -DestinationPath heft
+          & ./build/sonolint-cli_artefacts/Release/sonolint.exe list-params --plugin heft/Heft.vst3
+
+  macos:
+    name: macOS universal
+    runs-on: macos-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache the downloaded dependencies
+        uses: actions/cache@v6
+        with:
+          path: build/_deps
+          key: deps-${{ runner.os }}-${{ hashFiles('CMakeLists.txt') }}
+
+      - name: Configure, build and test
+        run: cmake --workflow --preset macos
+
+      - name: Check that the binary runs on Apple Silicon and Intel
+        run: lipo build/sonolint-cli_artefacts/Release/sonolint -verify_arch arm64 x86_64
+
+  core-linux:
+    name: Core on Linux (${{ matrix.compiler }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [g++, clang++]
+
+    env:
+      CXX: ${{ matrix.compiler }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Configure without JUCE
+        run: cmake -S . -B build -DSONOLINT_CORE_ONLY=ON -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
