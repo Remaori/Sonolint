@@ -17,6 +17,9 @@ Small decisions the build needed. Each takes the simplest option.
   code is held to it.
 - **The C++ runtime is linked statically on Windows**, as in Heft: `sonolint.exe`
   needs no Visual C++ redistributable.
+- **The core's sources and the unit tests are collected with a glob**
+  (`CONFIGURE_DEPENDS`, so the build notices new files). Adding an analyzer and its
+  test doesn't touch `CMakeLists.txt`, which keeps one commit per analyzer clean.
 - **The version is 0.0.x until the first release**, which is 0.1.0.
 - **CI on Windows runs `build.ps1`**, which only calls
   `cmake --workflow --preset windows`. That keeps the shortcut tested.
