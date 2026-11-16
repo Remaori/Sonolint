@@ -202,3 +202,6 @@ target_compile_definitions(sonolint-cli
 set_target_properties(sonolint-host sonolint-cli PROPERTIES COMPILE_WARNING_AS_ERROR ON)
 
 add_test(NAME cli-version COMMAND sonolint-cli version)
+
+# --- Test plugins and the tests that run the real binary against them -----------
+add_subdirectory(tests/fixtures)
