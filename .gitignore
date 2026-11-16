@@ -1,0 +1,11 @@
+# Build output
+/build/
+
+# Reports written by `sonolint run`
+sonolint-out/
+
+# Editor / IDE files and macOS metadata
+.vs/
+.vscode/
+*.user
+.DS_Store
