@@ -63,6 +63,11 @@ set(YAML_CPP_BUILD_TESTS   OFF CACHE BOOL "" FORCE)
 
 FetchContent_MakeAvailable(nlohmann_json yaml-cpp Catch2 pocketfft dr_libs)
 
+if(MSVC)
+    # yaml-cpp 0.9.0 warns about size_t conversions in its own sources.
+    target_compile_options(yaml-cpp PRIVATE /wd4267)
+endif()
+
 add_library(pocketfft INTERFACE)
 target_include_directories(pocketfft SYSTEM INTERFACE "${pocketfft_SOURCE_DIR}")
 
