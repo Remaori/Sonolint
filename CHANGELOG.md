@@ -15,6 +15,15 @@ The first version, 0.1.0, is in development. So far:
   file) and the first seven groups of metrics (level, true peak, harmonics with THD and
   THD+N, aliasing, frequency response, latency, silence) are written and tested
   against cases with a known answer. [`docs/METRICS.md`](docs/METRICS.md) defines each
-  one. They can't be used from the command line yet; that comes with `sonolint run`.
+  one.
+- `sonolint run` reads [`sonolint.yml`](docs/CONFIG.md), renders the plugin for each
+  scenario, measures it and writes `results.json`. It exits with 1 when a scenario
+  fails one of its `expect` rules, gives NaN or infinity, or hangs.
+- Three more groups of metrics: `determinism` (two renders must be bit-identical),
+  `block_invariance` (the audio must not depend on how the host cuts it into blocks)
+  and `cpu`. A latency reported wrong, a plugin that isn't deterministic and one that
+  depends on the block size fail without any rule being written.
+- `sonolint render` sends one signal through the plugin and writes the result to a WAV
+  file, to listen to what was measured.
 - Builds and tests with one command on Windows x64 (`cmake --workflow --preset windows`,
   or `.\build.ps1`) and on macOS as a universal binary (`cmake --workflow --preset macos`).

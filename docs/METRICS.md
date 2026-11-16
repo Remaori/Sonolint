@@ -1,9 +1,7 @@
 # Metrics
 
 How Sonolint builds its test signals and what each metric means, with the formulas.
-This page covers what exists today: the signal generators and seven metric groups.
-The robustness checks (determinism, block invariance, CPU) are added together with
-`sonolint run`.
+[CONFIG.md](CONFIG.md) says how to ask for them in `sonolint.yml`.
 
 ## Conventions
 
@@ -22,6 +20,14 @@ The robustness checks (determinism, block invariance, CPU) are added together wi
   The window is a 4-term Blackman-Harris. The power of a component is the sum of
   |X[k]|² over the bins k0 ± W with W = 6. Only ratios are reported, so the gain of
   the window cancels out.
+- **Alignment.** The plugin's output is measured without its first samples, as many
+  as the latency it reports, the way a DAW compensates it. Only `latency`,
+  `determinism` and `block_invariance` look at the raw output.
+- **Several channels.** Every metric is measured on each channel. The value reported
+  is the worst channel, which is the highest number (for a yes/no field, "no"); for a
+  curve, point by point. `results.json` also keeps each channel under `per_channel`.
+- **NaN and infinity.** A single one anywhere in the output makes the scenario an
+  `error`, whatever was asked.
 
 ## Test signals
 
@@ -58,7 +64,8 @@ are computed in double precision and converted to float at the end.
 ## Metric groups
 
 Tolerances and directions are the defaults used when comparing against a baseline.
-`lower` means lower is better, `target` means any change is a change.
+`lower` means lower is better, `target` means any change is a change, and `report`
+means the value is only shown and never fails.
 
 | Group | Fields | Needs | Default tolerance | Direction |
 | --- | --- | --- | --- | --- |
@@ -68,6 +75,9 @@ Tolerances and directions are the defaults used when comparing against a baselin
 | `aliasing` | `aliasing_dbc`, `components`, `skipped` | `sine` | 2.0 dB | lower |
 | `frequency_response` | `freqs_hz[]`, `magnitude_db[]`, `phase_deg[]`, `gain_1k_db` | `stepped_sine` | 0.1 dB per point; phase 2° (informative) | target |
 | `latency` | `reported_samples`, `measured_samples`, `mismatch_samples` | `impulse` or noise | 0, 0.5, 0.5 samples | target |
+| `determinism` | `bit_identical`, `max_diff_dbfs` | any signal | exact | target |
+| `block_invariance` | `max_diff_dbfs`, `rms_diff_dbfs` | any signal | 3 dB | lower |
+| `cpu` | `realtime_factor`, `core_percent`, `p95_block_us` | any signal | none | report |
 | `silence` | `noise_floor_dbfs`, `peak_dbfs` | `silence` | 1.0 dB | lower |
 
 ### level
@@ -139,7 +149,39 @@ its two neighbours. `mismatch_samples` = measured − reported.
 
 It needs an impulse or noise. A periodic signal such as a sine has no single answer.
 A latency that is reported wrong makes a DAW comb-filter the plugin against the
-tracks around it.
+tracks around it, so by default `mismatch_samples` must be between −1 and 1.
+
+### determinism
+
+The scenario is rendered twice, each time on a fresh instance. `bit_identical` says
+whether the two outputs are the same bit for bit, and `max_diff_dbfs` is
+20·log10(max|a − b|). By default `bit_identical` must be true. A difference means
+uninitialised memory or random state inside the plugin.
+
+### block_invariance
+
+One render in blocks of `block_size` is compared with another in blocks of random
+sizes from 1 to `block_size` (the sizes come from our generator with seed 12345, so
+they are the same on every run). `max_diff_dbfs` is the largest difference and
+`rms_diff_dbfs` its RMS. By default `max_diff_dbfs` must be −120 or less.
+
+It catches bugs that only show up in some DAWs, because each one cuts the audio into
+blocks its own way. A plugin that smooths its parameters once per block differs for a
+legitimate reason: write your own rule for it in `expect`.
+
+A plugin that isn't deterministic fails this check too, since no two of its renders
+are equal.
+
+### cpu
+
+The time spent inside the plugin's processing call, block by block, on a steady clock.
+The scenario is rendered 5 times and the figures are those of the median render:
+`realtime_factor` is that time divided by the duration of the audio, `core_percent`
+is 100 times that, and `p95_block_us` is the time in microseconds that 95 % of its
+blocks stayed under. The warm-up isn't counted.
+
+These values are only reported. The machines that run CI are too noisy to fail a
+build over them.
 
 ### silence
 
