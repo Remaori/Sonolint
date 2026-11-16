@@ -82,12 +82,16 @@ add_library(sonolint-core STATIC ${SONOLINT_CORE_SOURCES})
 
 target_include_directories(sonolint-core PUBLIC src)
 
+find_package(Threads REQUIRED)   # the watchdog that stops a scenario that hangs
+
 target_link_libraries(sonolint-core
+    PUBLIC
+        nlohmann_json::nlohmann_json   # results are built as JSON, also in the headers
     PRIVATE
-        nlohmann_json::nlohmann_json
         yaml-cpp::yaml-cpp
         pocketfft
         dr_libs
+        Threads::Threads
 )
 
 if(MSVC)
@@ -107,7 +111,6 @@ add_executable(sonolint-tests ${SONOLINT_TEST_SOURCES})
 target_link_libraries(sonolint-tests
     PRIVATE
         sonolint-core
-        nlohmann_json::nlohmann_json
         Catch2::Catch2WithMain
 )
 

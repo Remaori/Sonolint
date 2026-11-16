@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <string>
 #include <vector>
 
@@ -21,4 +22,9 @@ struct PluginInfo
     std::string name, vendor, version;
     std::vector<ParamInfo> params;
 };
+
+// The position in info.params of the parameter that `key` names: its exact name, or
+// else its hosted ID. Throws Error (config) when nothing matches (with the closest
+// name as a suggestion) or when the name is shared by several parameters.
+size_t findParam (const PluginInfo& info, const std::string& key);
 } // namespace sonolint

@@ -41,7 +41,8 @@ struct RenderResult
 {
     AudioBuffer output;   // untrimmed: as long as the input plus the tail
     int reportedLatencySamples = 0;
-    std::vector<double> processSecondsPerBlock;
+    std::vector<double> processSecondsPerBlock;   // one entry per processBlock call, warm-up not included
+    std::vector<std::string> warnings;            // things worth telling the user that aren't errors
     PluginInfo info;
 };
 

@@ -41,6 +41,20 @@ private:
     int reportedLatency;
 };
 
+// A Renderer that is whatever function the test needs.
+class LambdaRenderer : public sonolint::Renderer
+{
+public:
+    using Render = std::function<sonolint::RenderResult (const sonolint::RenderRequest&)>;
+
+    explicit LambdaRenderer (Render renderToUse) : renderFunction (std::move (renderToUse)) {}
+
+    sonolint::RenderResult render (const sonolint::RenderRequest& request) override { return renderFunction (request); }
+
+private:
+    Render renderFunction;
+};
+
 // The request a runner would make for this signal.
 inline sonolint::RenderRequest requestFor (const sonolint::Signal& signal, int tailSamples = 0)
 {
