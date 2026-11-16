@@ -58,8 +58,11 @@ jobs:
       - name: Configure, build and test
         run: cmake --workflow --preset macos
 
+      # One architecture per call: newer versions of lipo accept only one.
       - name: Check that the binary runs on Apple Silicon and Intel
-        run: lipo build/sonolint-cli_artefacts/Release/sonolint -verify_arch arm64 x86_64
+        run: |
+          lipo build/sonolint-cli_artefacts/Release/sonolint -verify_arch arm64
+          lipo build/sonolint-cli_artefacts/Release/sonolint -verify_arch x86_64
 
   core-linux:
     name: Core on Linux (${{ matrix.compiler }})
