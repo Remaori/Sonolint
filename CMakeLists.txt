@@ -205,3 +205,34 @@ add_test(NAME cli-version COMMAND sonolint-cli version)
 
 # --- Test plugins and the tests that run the real binary against them -----------
 add_subdirectory(tests/fixtures)
+
+file(GLOB SONOLINT_INTEGRATION_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/*.cpp")
+
+add_executable(sonolint-integration-tests ${SONOLINT_INTEGRATION_SOURCES})
+
+target_link_libraries(sonolint-integration-tests
+    PRIVATE
+        sonolint-core
+        Catch2::Catch2WithMain
+)
+
+# Where the binary, its configs and the test plugins are, and where it may write.
+target_compile_definitions(sonolint-integration-tests
+    PRIVATE
+        SONOLINT_EXE="$<TARGET_FILE:sonolint-cli>"
+        SONOLINT_CONFIGS="${CMAKE_CURRENT_SOURCE_DIR}/tests/integration"
+        SONOLINT_FIXTURES="${CMAKE_CURRENT_BINARY_DIR}/tests/fixtures"
+        SONOLINT_BUILD_CONFIG="$<CONFIG>"
+        SONOLINT_OUT="${CMAKE_CURRENT_BINARY_DIR}/integration-out"
+)
+
+get_property(SONOLINT_FIXTURE_NAMES GLOBAL PROPERTY SONOLINT_FIXTURES)
+
+foreach(fixture ${SONOLINT_FIXTURE_NAMES})
+    add_dependencies(sonolint-integration-tests ${fixture}_VST3)
+endforeach()
+
+add_dependencies(sonolint-integration-tests sonolint-cli)
+set_target_properties(sonolint-integration-tests PROPERTIES COMPILE_WARNING_AS_ERROR ON)
+
+add_test(NAME integration COMMAND sonolint-integration-tests)

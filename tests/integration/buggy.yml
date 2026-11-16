@@ -1,0 +1,44 @@
+# SonolintBuggy with one bug switched on per scenario. Each bug must fail its own
+# check and no other.
+version: 1
+
+scenarios:
+  - id: clean
+    signal: { type: pink_noise, level_dbfs: -18, duration_s: 1 }
+    metrics: [determinism, block_invariance, level]
+
+  - id: clean-silence
+    signal: { type: silence, duration_s: 1 }
+    metrics: [silence]
+    expect:
+      silence.noise_floor_dbfs: { max: -100 }
+
+  - id: nondeterministic
+    params: { Nondeterministic: 1.0 }
+    signal: { type: pink_noise, level_dbfs: -18, duration_s: 1 }
+    metrics: [determinism, level]
+    expect:
+      level.gain_db: { approx: 0.0, tol: 0.01 }
+
+  - id: block-bug
+    params: { BlockBug: 1.0 }
+    signal: { type: pink_noise, level_dbfs: -18, duration_s: 1 }
+    metrics: [determinism, block_invariance]
+
+  - id: nan
+    params: { NanAbove90: 1.0, Drive: 0.95 }
+    signal: { type: pink_noise, level_dbfs: -18, duration_s: 1 }
+    metrics: [level]
+
+  # The bug is on but Drive stays under 0.9: nothing happens.
+  - id: nan-not-triggered
+    params: { NanAbove90: 1.0, Drive: 0.5 }
+    signal: { type: pink_noise, level_dbfs: -18, duration_s: 1 }
+    metrics: [level]
+
+  - id: oscillate
+    params: { Oscillate: 1.0 }
+    signal: { type: silence, duration_s: 1 }
+    metrics: [silence, determinism, block_invariance]
+    expect:
+      silence.noise_floor_dbfs: { max: -100 }
