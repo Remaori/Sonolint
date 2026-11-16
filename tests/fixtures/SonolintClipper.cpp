@@ -11,7 +11,7 @@ class Clipper : public Fixture
 public:
     Clipper() : thresholdDb (addFloat ("Threshold", -24.0f, 0.0f, -6.0f, "dB")), oversample (addChoice ("Oversample", { "1x", "4x" })) {}
 
-    void prepareToPlay (double, int blockSize) override
+    void prepareToPlay (double, int largestBlock) override
     {
         oversampling.reset();
 
@@ -20,7 +20,7 @@ public:
             // 2 stages of 2x. The last argument asks for a latency that is a whole number of samples.
             oversampling = std::make_unique<juce::dsp::Oversampling<float>> ((size_t) getTotalNumInputChannels(), 2,
                                                                              juce::dsp::Oversampling<float>::filterHalfBandFIREquiripple, true, true);
-            oversampling->initProcessing ((size_t) blockSize);
+            oversampling->initProcessing ((size_t) largestBlock);
         }
 
         setLatencySamples (oversampling != nullptr ? (int) std::lround (oversampling->getLatencyInSamples()) : 0);
