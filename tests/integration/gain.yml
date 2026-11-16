@@ -1,0 +1,36 @@
+# SonolintGain is y = g * x: every number here has an exact answer.
+version: 1
+
+scenarios:
+  - id: minus-6-db
+    params: { Gain: { text: "-6 dB" } }
+    signal: { type: sine, freq_hz: 1000, level_dbfs: -6 }
+    metrics: [level, harmonics, aliasing, true_peak]
+    expect:
+      level.gain_db: { approx: -6.0, tol: 0.001 }
+      level.peak_dbfs: { approx: -12.0, tol: 0.001 }
+      harmonics.thdn_db: { max: -120 }
+      aliasing.aliasing_dbc: { max: -120 }
+
+  # Gain goes from -24 to +12 dB, so 0.75 of the way is +3 dB.
+  - id: plus-3-db-robust
+    params: { Gain: 0.75 }
+    signal: { type: pink_noise, level_dbfs: -18, duration_s: 1 }
+    metrics: [level, latency, determinism, block_invariance, cpu]
+    expect:
+      level.gain_db: { approx: 3.0, tol: 0.001 }
+      latency.reported_samples: { equals: 0 }
+      latency.measured_samples: { approx: 0.0, tol: 0.05 }
+
+  - id: mono
+    channels: 1
+    signal: { type: sine, freq_hz: 1000, level_dbfs: -6 }
+    metrics: [level]
+    expect:
+      level.gain_db: { approx: 0.0, tol: 0.001 }
+
+  - id: silent
+    signal: { type: silence, duration_s: 1 }
+    metrics: [silence]
+    expect:
+      silence.noise_floor_dbfs: { max: -200 }

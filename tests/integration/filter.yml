@@ -1,0 +1,10 @@
+# SonolintFilter is a first-order low-pass at 1 kHz: its response has a formula.
+version: 1
+
+scenarios:
+  - id: response
+    params: { Cutoff: { text: "1000" } }
+    signal: { type: stepped_sine, level_dbfs: -24, points: third_octave }
+    metrics: [frequency_response]
+    expect:
+      frequency_response.gain_1k_db: { approx: -3.0103, tol: 0.05 }

@@ -1,0 +1,9 @@
+# The same plugin reporting 10 samples more than its real delay. Nothing is expected
+# here: the rule that Sonolint applies by itself to the latency must catch it.
+version: 1
+
+scenarios:
+  - id: lying
+    params: { Delay: { text: "37" }, LieAboutLatency: 1.0 }
+    signal: { type: impulse }
+    metrics: [latency]

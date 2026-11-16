@@ -2,8 +2,7 @@
 
 #include "core/error.h"
 #include "core/io/path_text.h"
-
-#include <juce_audio_processors_headless/juce_audio_processors_headless.h>
+#include "host/juce_plugin.h"
 
 namespace sonolint
 {
@@ -16,7 +15,7 @@ constexpr int    kBlockSize  = 512;
 constexpr int    kMaxTextLength = 128;
 } // namespace
 
-PluginInfo inspectPlugin (const std::filesystem::path& path)
+LoadedPlugin loadPlugin (const std::filesystem::path& path, const std::string& pluginName, double sampleRate, int blockSize)
 {
     const auto pathText = toUtf8 (path);
 
@@ -25,46 +24,63 @@ PluginInfo inspectPlugin (const std::filesystem::path& path)
 
     // The headless format was only tried with Heft. If a third-party plugin doesn't load,
     // try juce::VST3PluginFormat (module juce_audio_processors) first: docs/adr/0016.
-    juce::AudioPluginFormatManager manager;
-    manager.addFormat (std::make_unique<juce::VST3PluginFormatHeadless>());
+    LoadedPlugin plugin;
+    plugin.formats = std::make_unique<juce::AudioPluginFormatManager>();
+    plugin.formats->addFormat (std::make_unique<juce::VST3PluginFormatHeadless>());
 
     juce::OwnedArray<juce::PluginDescription> types;
-    manager.getFormat (0)->findAllTypesForFile (types, juce::String::fromUTF8 (pathText.data(), (int) pathText.size()));
+    plugin.formats->getFormat (0)->findAllTypesForFile (types, juce::String::fromUTF8 (pathText.data(), (int) pathText.size()));
 
     if (types.isEmpty())
         throw Error (ErrorCode::pluginLoad, "not a VST3 plugin, or it could not be read: " + pathText);
 
-    if (types.size() > 1)
+    juce::StringArray names;
+
+    for (const auto* type : types)
+        names.add (type->name);
+
+    const auto available = " (it contains: " + names.joinIntoString (", ").toStdString() + ")";
+    auto chosen = 0;
+
+    if (! pluginName.empty())
     {
-        juce::StringArray names;
+        chosen = names.indexOf (juce::String::fromUTF8 (pluginName.data(), (int) pluginName.size()));
 
-        for (const auto* type : types)
-            names.add (type->name);
-
-        throw Error (ErrorCode::pluginLoad, pathText + " contains more than one plugin (" + names.joinIntoString (", ").toStdString()
-                                                + "); choosing one is not supported yet");
+        if (chosen < 0)
+            throw Error (ErrorCode::pluginLoad, pathText + " has no plugin called \"" + pluginName + "\"" + available);
+    }
+    else if (types.size() > 1)
+    {
+        throw Error (ErrorCode::pluginLoad, pathText + " holds more than one plugin; choose one with plugin.name" + available);
     }
 
-    juce::String error;
-    const auto plugin = manager.createPluginInstance (*types[0], kSampleRate, kBlockSize, error);
+    plugin.description = *types[chosen];
 
-    if (plugin == nullptr)
+    juce::String error;
+    plugin.instance = plugin.formats->createPluginInstance (plugin.description, sampleRate, blockSize, error);
+
+    if (plugin.instance == nullptr)
         throw Error (ErrorCode::pluginLoad, "could not create an instance of " + pathText + ": " + error.toStdString());
 
+    return plugin;
+}
+
+PluginInfo describePlugin (const LoadedPlugin& plugin)
+{
     PluginInfo info;
-    info.name    = types[0]->name.toStdString();
-    info.vendor  = types[0]->manufacturerName.toStdString();
-    info.version = types[0]->version.toStdString();
+    info.name    = plugin.description.name.toStdString();
+    info.vendor  = plugin.description.manufacturerName.toStdString();
+    info.version = plugin.description.version.toStdString();
 
-    const auto* bypass = plugin->getBypassParameter();
+    const auto* bypass = plugin.instance->getBypassParameter();
 
-    for (auto* param : plugin->getParameters())
+    for (auto* param : plugin.instance->getParameters())
     {
         ParamInfo p;
         p.index = param->getParameterIndex();
         p.name  = param->getName (kMaxTextLength).toStdString();
 
-        if (const auto* hosted = plugin->getHostedParameter (p.index))
+        if (const auto* hosted = plugin.instance->getHostedParameter (p.index))
             p.id = hosted->getParameterID().toStdString();
 
         p.defaultValue = param->getDefaultValue();
@@ -81,5 +97,10 @@ PluginInfo inspectPlugin (const std::filesystem::path& path)
     }
 
     return info;
+}
+
+PluginInfo inspectPlugin (const std::filesystem::path& path, const std::string& pluginName)
+{
+    return describePlugin (loadPlugin (path, pluginName, kSampleRate, kBlockSize));
 }
 } // namespace sonolint

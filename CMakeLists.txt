@@ -82,12 +82,16 @@ add_library(sonolint-core STATIC ${SONOLINT_CORE_SOURCES})
 
 target_include_directories(sonolint-core PUBLIC src)
 
+find_package(Threads REQUIRED)   # the watchdog that stops a scenario that hangs
+
 target_link_libraries(sonolint-core
+    PUBLIC
+        nlohmann_json::nlohmann_json   # results are built as JSON, also in the headers
     PRIVATE
-        nlohmann_json::nlohmann_json
         yaml-cpp::yaml-cpp
         pocketfft
         dr_libs
+        Threads::Threads
 )
 
 if(MSVC)
@@ -107,7 +111,6 @@ add_executable(sonolint-tests ${SONOLINT_TEST_SOURCES})
 target_link_libraries(sonolint-tests
     PRIVATE
         sonolint-core
-        nlohmann_json::nlohmann_json
         Catch2::Catch2WithMain
 )
 
@@ -136,9 +139,9 @@ FetchContent_Declare(CLI11
 FetchContent_MakeAvailable(JUCE CLI11)
 
 # --- sonolint-host: loads the VST3 and renders audio through it, with JUCE -----
-add_library(sonolint-host STATIC
-    src/host/plugin_loader.cpp
-)
+file(GLOB SONOLINT_HOST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/host/*.cpp")
+
+add_library(sonolint-host STATIC ${SONOLINT_HOST_SOURCES})
 
 # The JUCE modules are compiled into this library once. Whoever links it gets its
 # definitions and include paths, so JUCE headers mean the same thing everywhere.
@@ -199,3 +202,37 @@ target_compile_definitions(sonolint-cli
 set_target_properties(sonolint-host sonolint-cli PROPERTIES COMPILE_WARNING_AS_ERROR ON)
 
 add_test(NAME cli-version COMMAND sonolint-cli version)
+
+# --- Test plugins and the tests that run the real binary against them -----------
+add_subdirectory(tests/fixtures)
+
+file(GLOB SONOLINT_INTEGRATION_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/*.cpp")
+
+add_executable(sonolint-integration-tests ${SONOLINT_INTEGRATION_SOURCES})
+
+target_link_libraries(sonolint-integration-tests
+    PRIVATE
+        sonolint-core
+        Catch2::Catch2WithMain
+)
+
+# Where the binary, its configs and the test plugins are, and where it may write.
+target_compile_definitions(sonolint-integration-tests
+    PRIVATE
+        SONOLINT_EXE="$<TARGET_FILE:sonolint-cli>"
+        SONOLINT_CONFIGS="${CMAKE_CURRENT_SOURCE_DIR}/tests/integration"
+        SONOLINT_FIXTURES="${CMAKE_CURRENT_BINARY_DIR}/tests/fixtures"
+        SONOLINT_BUILD_CONFIG="$<CONFIG>"
+        SONOLINT_OUT="${CMAKE_CURRENT_BINARY_DIR}/integration-out"
+)
+
+get_property(SONOLINT_FIXTURE_NAMES GLOBAL PROPERTY SONOLINT_FIXTURES)
+
+foreach(fixture ${SONOLINT_FIXTURE_NAMES})
+    add_dependencies(sonolint-integration-tests ${fixture}_VST3)
+endforeach()
+
+add_dependencies(sonolint-integration-tests sonolint-cli)
+set_target_properties(sonolint-integration-tests PROPERTIES COMPILE_WARNING_AS_ERROR ON)
+
+add_test(NAME integration COMMAND sonolint-integration-tests)

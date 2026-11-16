@@ -1,0 +1,19 @@
+# SonolintDelay delays by Delay samples and tells the host so.
+version: 1
+
+scenarios:
+  - id: honest
+    params: { Delay: { text: "37" } }
+    signal: { type: impulse }
+    metrics: [latency]
+    expect:
+      latency.reported_samples: { equals: 37 }
+      latency.measured_samples: { approx: 37.0, tol: 0.05 }
+
+  - id: honest-noise
+    params: { Delay: { text: "480" } }
+    signal: { type: white_noise, level_dbfs: -18, duration_s: 1 }
+    metrics: [latency, level]
+    expect:
+      latency.measured_samples: { approx: 480.0, tol: 0.05 }
+      level.gain_db: { approx: 0.0, tol: 0.001 }
