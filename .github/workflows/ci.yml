@@ -31,6 +31,17 @@ jobs:
         shell: pwsh
         run: ./build.ps1
 
+      # What the self-test of the Action runs: the sonolint just built and the test plugin.
+      - name: Keep the binary and the test plugin
+        uses: actions/upload-artifact@v7
+        with:
+          name: self-test-${{ runner.os }}
+          path: |
+            build/sonolint-cli_artefacts/Release/sonolint*
+            build/tests/fixtures/SonolintFixture_artefacts/Release/VST3/
+          if-no-files-found: error
+          retention-days: 3
+
       # A real plugin built somewhere else: the latest published release of Heft.
       - name: List the parameters of Heft
         shell: pwsh
@@ -57,6 +68,17 @@ jobs:
 
       - name: Configure, build and test
         run: cmake --workflow --preset macos
+
+      # What the self-test of the Action runs: the sonolint just built and the test plugin.
+      - name: Keep the binary and the test plugin
+        uses: actions/upload-artifact@v7
+        with:
+          name: self-test-${{ runner.os }}
+          path: |
+            build/sonolint-cli_artefacts/Release/sonolint*
+            build/tests/fixtures/SonolintFixture_artefacts/Release/VST3/
+          if-no-files-found: error
+          retention-days: 3
 
       # One architecture per call: newer versions of lipo accept only one.
       - name: Check that the binary runs on Apple Silicon and Intel
@@ -88,3 +110,116 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build --output-on-failure
+
+  # The Action of this pull request, run with the binary just built instead of a
+  # release. On macOS it comments on the pull request; push twice to see it edit
+  # the comment instead of adding another.
+  self-test:
+    name: Action self-test (${{ matrix.os }})
+    needs: [windows, macos]
+    if: github.event_name == 'pull_request'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: self-test-Windows
+            exe: sonolint.exe
+            comment: 'false'
+          - os: macos-latest
+            artifact: self-test-macOS
+            exe: sonolint
+            comment: 'true'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ matrix.artifact }}
+          path: self-test
+
+      - name: Restore the executable bits, which artifacts drop
+        if: runner.os == 'macOS'
+        run: chmod -R u+x self-test
+
+      - name: Run the Action
+        id: run
+        uses: ./
+        with:
+          binary: self-test/sonolint-cli_artefacts/Release/${{ matrix.exe }}
+          plugin: self-test/tests/fixtures/SonolintFixture_artefacts/Release/VST3/SonolintFixture.vst3
+          config: tests/integration/gain.yml
+          baseline: tests/integration/no-baseline-here.json
+          comment: ${{ matrix.comment }}
+
+      - name: Check what the run left
+        shell: pwsh
+        env:
+          STATUS: ${{ steps.run.outputs.status }}
+          REGRESSIONS: ${{ steps.run.outputs.regressions }}
+          REPORT_DIR: ${{ steps.run.outputs.report-dir }}
+        run: |
+          if ($env:STATUS -ne 'pass' -or $env:REGRESSIONS -ne '0') { throw "status '$env:STATUS', regressions '$env:REGRESSIONS'" }
+          foreach ($file in 'results.json', 'report.md', 'report.html', 'junit.xml') {
+              if (-not (Test-Path (Join-Path $env:REPORT_DIR $file))) { throw "$file is missing" }
+          }
+          $environment = (Get-Content -Raw (Join-Path $env:REPORT_DIR 'results.json') | ConvertFrom-Json).environment
+          if (-not $environment.runner_image_os) { throw 'the runner image is not in results.json' }
+
+      - name: Make a baseline with the Action
+        id: baseline
+        uses: ./
+        with:
+          mode: baseline
+          binary: self-test/sonolint-cli_artefacts/Release/${{ matrix.exe }}
+          plugin: self-test/tests/fixtures/SonolintFixture_artefacts/Release/VST3/SonolintFixture.vst3
+          config: tests/integration/gain.yml
+          baseline: tests/integration/no-baseline-here.json
+
+      - name: Check the baseline
+        shell: pwsh
+        env:
+          REPORT_DIR: ${{ steps.baseline.outputs.report-dir }}
+        run: |
+          $baseline = Get-Content -Raw (Join-Path $env:REPORT_DIR 'baseline.json') | ConvertFrom-Json
+          $platforms = @($baseline.platforms.PSObject.Properties.Name)
+          if ($platforms.Count -ne 1) { throw "expected one platform, got: $platforms" }
+          Write-Output "Baseline written for $platforms"
+
+  # A pull request from a fork gets a read-only token: the comment can't be posted, and
+  # the job must still pass, with a warning.
+  self-test-read-only:
+    name: Action self-test with a read-only token
+    needs: macos
+    if: github.event_name == 'pull_request'
+    runs-on: macos-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: self-test-macOS
+          path: self-test
+
+      - name: Restore the executable bits, which artifacts drop
+        run: chmod -R u+x self-test
+
+      - name: Run the Action
+        uses: ./
+        with:
+          binary: self-test/sonolint-cli_artefacts/Release/sonolint
+          plugin: self-test/tests/fixtures/SonolintFixture_artefacts/Release/VST3/SonolintFixture.vst3
+          config: tests/integration/gain.yml
+          baseline: tests/integration/no-baseline-here.json
