@@ -21,6 +21,10 @@ struct RunOptions
     // results so far and that scenario marked as an error. The render is stuck inside
     // the plugin, so the only way out is to save this and end the process.
     std::function<void (const nlohmann::json&)> onTimeout;
+
+    // Called with each scenario's input and the raw output of its main render (with the
+    // latency and the tail), before anything is checked. May be empty.
+    std::function<void (const std::string& id, const AudioBuffer& input, const AudioBuffer& output)> onAudio;
 };
 
 // Runs the scenarios one after another, each on a fresh plugin instance: makes the

@@ -304,3 +304,41 @@ TEST_CASE ("Reproducibility: two runs write the same results, apart from the mac
     REQUIRE (first.results.is_object());
     CHECK (withoutTimes (first.results) == withoutTimes (second.results));
 }
+
+TEST_CASE ("Reports: --format chooses the files, --save-audio writes the WAVs, and the footer names the commit")
+{
+    const auto folder = std::filesystem::path (SONOLINT_OUT) / "reports";
+
+    // By default, the four reports.
+    run ("gain", "--no-compare", "reports-default");
+    for (const auto* file : { "results.json", "report.md", "report.html", "junit.xml" })
+    {
+        CAPTURE (file);
+        CHECK (std::filesystem::exists (std::filesystem::path (SONOLINT_OUT) / "reports-default" / file));
+    }
+
+    // Only what --format asks for.
+    std::filesystem::remove_all (folder);
+    REQUIRE (runSonolint ("run --config " + configFile ("gain") + " --plugin " + quoted (fixture()) + " --no-compare --out " + quoted (folder)
+                          + " --format md,junit --save-audio --artifact-url https://example.com/run/1 --commit 0123456789abcdef0123456789abcdef01234567"
+                          + " --merged-into main") == 0);
+
+    CHECK (std::filesystem::exists (folder / "report.md"));
+    CHECK (std::filesystem::exists (folder / "junit.xml"));
+    CHECK_FALSE (std::filesystem::exists (folder / "results.json"));
+    CHECK_FALSE (std::filesystem::exists (folder / "report.html"));
+
+    std::ifstream markdown (folder / "report.md", std::ios::binary);
+    const std::string text { std::istreambuf_iterator<char> (markdown), std::istreambuf_iterator<char>() };
+    CHECK (text.find ("[Full report](https://example.com/run/1)") != std::string::npos);
+    CHECK (text.find ("Commit 0123456 (merged into main)") != std::string::npos);
+
+    // The input and the raw output of each scenario: 2 s of sine and the 100 ms tail.
+    const auto input = sonolint::readWav (folder / "audio" / "minus-6-db.input.wav");
+    const auto output = sonolint::readWav (folder / "audio" / "minus-6-db.output.wav");
+    CHECK (input.numSamples() == 96000);
+    CHECK (output.numSamples() == 96000 + 4800);
+    CHECK (output.channels.size() == 2);
+
+    CHECK (runSonolint ("run --config " + configFile ("gain") + " --plugin " + quoted (fixture()) + " --format pdf --out " + quoted (folder)) == 2);
+}
