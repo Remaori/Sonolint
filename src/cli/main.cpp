@@ -34,7 +34,7 @@ using sonolint::ErrorCode;
 struct RunArgs
 {
     std::filesystem::path config = "sonolint.yml", plugin, out = "sonolint-out", baseline = "sonolint/baseline.json";
-    std::vector<std::string> filters;
+    std::vector<std::string> filters, environment;
     std::string failOn = "regressions", formats = "md,html,json,junit", artifactUrl, commit, mergedInto;
     bool verbose = false, noCompare = false, saveAudio = false;
 };
@@ -48,17 +48,37 @@ struct RenderArgs
     int blockSize = 512;
 };
 
-// What only the executable knows: its version and the machine.
-void addEnvironment (json& results)
+// --environment KEY=VALUE: what the caller knows about the machine and Sonolint can't,
+// such as the image of a CI runner.
+json parseEnvironment (const std::vector<std::string>& entries)
+{
+    auto extra = json::object();
+
+    for (const auto& entry : entries)
+    {
+        const auto equals = entry.find ('=');
+        const auto key = entry.substr (0, equals);
+
+        if (equals == std::string::npos || key.empty())
+            throw Error (ErrorCode::config, "--environment: expected KEY=VALUE, got \"" + entry + "\"");
+
+        if (key == "platform" || key == "os" || key == "cpu")
+            throw Error (ErrorCode::config, "--environment: Sonolint measures \"" + key + "\" itself");
+
+        extra[key] = entry.substr (equals + 1);
+    }
+
+    return extra;
+}
+
+// What only the executable knows (its version and the machine), and what --environment adds.
+void addEnvironment (json& results, const std::vector<std::string>& extra)
 {
     results["sonolint_version"] = SONOLINT_VERSION;
     results["environment"] = { { "platform", sonolint::currentPlatform() },
                                { "os", juce::SystemStats::getOperatingSystemName().toStdString() },
                                { "cpu", juce::SystemStats::getCpuModel().toStdString() } };
-
-    // On GitHub's runners: which image ran this. A new image can move the numbers a little.
-    if (const auto image = juce::SystemStats::getEnvironmentVariable ("ImageVersion", {}); image.isNotEmpty())
-        results["environment"]["runner_image"] = (juce::SystemStats::getEnvironmentVariable ("ImageOS", {}) + " " + image).toStdString();
+    results["environment"].update (parseEnvironment (extra));
 }
 
 void writeText (const std::filesystem::path& file, const std::string& text)
@@ -71,9 +91,9 @@ void writeText (const std::filesystem::path& file, const std::string& text)
         throw Error (ErrorCode::config, "could not write " + sonolint::toUtf8 (file));
 }
 
-void writeResults (const std::filesystem::path& outDir, json results)
+void writeResults (const std::filesystem::path& outDir, json results, const std::vector<std::string>& extra)
 {
-    addEnvironment (results);
+    addEnvironment (results, extra);
     writeText (outDir / "results.json", results.dump (2) + "\n");
 }
 
@@ -137,7 +157,7 @@ json runConfig (const RunArgs& args, const sonolint::Config& config)
     // was measured and end the process.
     options.onTimeout = [&] (const json& partial)
     {
-        writeResults (args.out, partial);
+        writeResults (args.out, partial, args.environment);
         std::cerr << "error: a scenario ran past its timeout; the results so far are in " << sonolint::toUtf8 (args.out / "results.json") << std::endl;
         std::_Exit (1);
     };
@@ -148,6 +168,7 @@ json runConfig (const RunArgs& args, const sonolint::Config& config)
 int run (const RunArgs& args)
 {
     const auto formats = parseFormats (args.formats);
+    parseEnvironment (args.environment);   // a mistake stops the run before anything is rendered
     const auto config = sonolint::loadConfig (args.config);
     const auto platform = sonolint::currentPlatform();
     const auto baseline = args.noCompare ? json() : sonolint::loadBaseline (args.baseline);   // a broken file stops here, before rendering
@@ -168,7 +189,7 @@ int run (const RunArgs& args)
                       << std::endl;
     }
 
-    addEnvironment (results);
+    addEnvironment (results, args.environment);
     const sonolint::ReportInfo info { args.artifactUrl, args.commit, args.mergedInto };
     const auto wants = [&] (const char* format) { return std::find (formats.begin(), formats.end(), format) != formats.end(); };
 
@@ -301,6 +322,8 @@ int main (int argc, char* argv[])
     runCommand->add_option ("--commit", runArgs.commit, "The commit that was measured, for the footers of the reports")->type_name ("SHA");
     runCommand->add_option ("--merged-into", runArgs.mergedInto, "The branch the commit was merged into before measuring, for the footers")
         ->type_name ("BRANCH");
+    runCommand->add_option ("--environment", runArgs.environment, "Something about the machine to record in results.json, such as a CI runner's image; can be repeated")
+        ->type_name ("KEY=VALUE");
     runCommand->footer ("Example:\n  sonolint run --plugin build/Heft_artefacts/Release/VST3/Heft.vst3");
 
     RunArgs updateArgs;

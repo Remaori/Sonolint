@@ -237,7 +237,7 @@ how each value is compared.
 sonolint run [--config sonolint.yml] [--plugin PATH] [--baseline sonolint/baseline.json] [--out sonolint-out]
              [--filter GLOB]... [--fail-on regressions|assertions|none] [--no-compare]
              [--format md,html,json,junit] [--save-audio] [--artifact-url URL] [--commit SHA] [--merged-into BRANCH]
-             [--verbose]
+             [--environment KEY=VALUE]... [--verbose]
 ```
 
 `--filter` keeps the scenarios whose id matches the glob (`*` and `?`), and can be
@@ -290,6 +290,11 @@ the full report (`--artifact-url`), the commit measured (`--commit`, a full SHA 
 shortened) and the branch it was merged into before measuring (`--merged-into`), shown
 as `Commit abc1234 (merged into main)`. Sonolint reads nothing from the CI itself; the
 Action passes these.
+
+`--environment KEY=VALUE`, which can be repeated, adds to what `results.json` says about
+the machine: the Action records the image of the GitHub runner this way, since a new
+image can move the numbers a little. Sonolint measures `platform`, `os` and `cpu`
+itself, so those keys can't be set.
 
 | Exit code | Meaning |
 | --- | --- |
