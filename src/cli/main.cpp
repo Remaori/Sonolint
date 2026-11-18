@@ -1,3 +1,5 @@
+#include "core/compare/baseline.h"
+#include "core/compare/compare.h"
 #include "core/config/config.h"
 #include "core/error.h"
 #include "core/io/path_text.h"
@@ -25,9 +27,10 @@ using sonolint::ErrorCode;
 
 struct RunArgs
 {
-    std::filesystem::path config = "sonolint.yml", plugin, out = "sonolint-out";
+    std::filesystem::path config = "sonolint.yml", plugin, out = "sonolint-out", baseline = "sonolint/baseline.json";
     std::vector<std::string> filters;
-    bool verbose = false;
+    std::string failOn = "regressions";
+    bool verbose = false, noCompare = false;
 };
 
 struct RenderArgs
@@ -60,9 +63,10 @@ void writeResults (const std::filesystem::path& outDir, json results)
         throw Error (ErrorCode::config, "could not write " + sonolint::toUtf8 (file));
 }
 
-int run (const RunArgs& args)
+// The scenarios of the config that match --filter, run on the plugin. What `run` and
+// `baseline update` share.
+json runConfig (const RunArgs& args, const sonolint::Config& config)
 {
-    const auto config = sonolint::loadConfig (args.config);
     const auto pluginPath = args.plugin.empty() ? config.pluginPath : args.plugin;
 
     if (pluginPath.empty())
@@ -93,10 +97,68 @@ int run (const RunArgs& args)
         std::_Exit (1);
     };
 
-    const auto results = sonolint::runScenarios (scenarios, plugin, renderer, options);
+    return sonolint::runScenarios (scenarios, plugin, renderer, options);
+}
+
+int run (const RunArgs& args)
+{
+    const auto config = sonolint::loadConfig (args.config);
+    const auto platform = sonolint::currentPlatform();
+    const auto baseline = args.noCompare ? json() : sonolint::loadBaseline (args.baseline);   // a broken file stops here, before rendering
+    const auto section = sonolint::platformScenarios (baseline, platform);
+
+    auto results = runConfig (args, config);
+
+    if (! args.noCompare)
+    {
+        sonolint::compareWithBaseline (results, section, config.scenarios, config.tolerances, args.filters);
+        results["baseline"] = { { "file", sonolint::toUtf8 (args.baseline) }, { "platform", platform } };
+
+        if (baseline.is_null())
+            std::cerr << "note: there is no baseline at " << sonolint::toUtf8 (args.baseline)
+                      << ", so every value is new; create it with sonolint baseline update" << std::endl;
+        else if (section.is_null())
+            std::cerr << "note: the baseline has no values for " << platform << " yet, so every value is new; add them with sonolint baseline update"
+                      << std::endl;
+    }
+
     writeResults (args.out, results);
     std::cout << sonolint::formatSummary (results);
-    return sonolint::hasFailures (results) ? 1 : 0;
+
+    const auto policy = args.failOn == "none"         ? sonolint::FailOn::none
+                      : args.failOn == "assertions"   ? sonolint::FailOn::assertions
+                                                      : sonolint::FailOn::regressions;
+    return sonolint::fails (results, policy) ? 1 : 0;
+}
+
+int updateBaseline (const RunArgs& args)
+{
+    const auto config = sonolint::loadConfig (args.config);
+    const auto existing = sonolint::loadBaseline (args.baseline);
+    const auto results = runConfig (args, config);
+
+    sonolint::saveBaseline (args.baseline, sonolint::updateBaseline (existing, results, sonolint::currentPlatform(), args.filters, SONOLINT_VERSION));
+    std::cout << sonolint::formatSummary (results);
+
+    std::vector<std::string> errored;
+
+    for (const auto& scenario : results["scenarios"])
+        if (scenario["status"] == "error")
+            errored.push_back (scenario["id"].get<std::string>());
+
+    std::cout << "wrote " << results["scenarios"].size() - errored.size() << " scenarios for " << sonolint::currentPlatform() << " to "
+              << sonolint::toUtf8 (args.baseline) << "\n";
+
+    if (errored.empty())
+        return 0;
+
+    std::cerr << "error: " << errored.size() << " scenarios ended in error and kept the values they had:";
+
+    for (const auto& id : errored)
+        std::cerr << " " << id;
+
+    std::cerr << std::endl;
+    return 1;
 }
 
 int render (const RenderArgs& args)
@@ -152,6 +214,16 @@ int listParams (const std::filesystem::path& pluginPath, bool asJson)
     std::cout << (asJson ? sonolint::formatParamJson (plugin) : sonolint::formatParamTable (plugin));
     return 0;
 }
+
+// The options that `run` and `baseline update` share.
+void addScenarioOptions (CLI::App& command, RunArgs& args)
+{
+    command.add_option ("--config", args.config, "The configuration file")->capture_default_str()->type_name ("PATH");
+    command.add_option ("--plugin", args.plugin, "Path to the .vst3; replaces plugin.path of the config")->type_name ("PATH");
+    command.add_option ("--baseline", args.baseline, "The baseline file")->capture_default_str()->type_name ("PATH");
+    command.add_option ("--filter", args.filters, "Only the scenarios whose id matches this glob; can be repeated")->type_name ("GLOB");
+    command.add_flag ("--verbose", args.verbose, "Print each scenario as it finishes");
+}
 } // namespace
 
 int main (int argc, char* argv[])
@@ -161,13 +233,21 @@ int main (int argc, char* argv[])
     app.require_subcommand (1);
 
     RunArgs runArgs;
-    auto* runCommand = app.add_subcommand ("run", "Run the scenarios of sonolint.yml and write results.json");
-    runCommand->add_option ("--config", runArgs.config, "The configuration file")->capture_default_str()->type_name ("PATH");
-    runCommand->add_option ("--plugin", runArgs.plugin, "Path to the .vst3; replaces plugin.path of the config")->type_name ("PATH");
+    auto* runCommand = app.add_subcommand ("run", "Run the scenarios of sonolint.yml, compare them with the baseline and write results.json");
+    addScenarioOptions (*runCommand, runArgs);
     runCommand->add_option ("--out", runArgs.out, "Folder for the results")->capture_default_str()->type_name ("DIR");
-    runCommand->add_option ("--filter", runArgs.filters, "Only the scenarios whose id matches this glob; can be repeated")->type_name ("GLOB");
-    runCommand->add_flag ("--verbose", runArgs.verbose, "Print each scenario as it finishes");
+    runCommand->add_option ("--fail-on", runArgs.failOn, "What makes the run fail")
+        ->check (CLI::IsMember ({ "regressions", "assertions", "none" }))
+        ->capture_default_str();
+    runCommand->add_flag ("--no-compare", runArgs.noCompare, "Don't compare with the baseline");
     runCommand->footer ("Example:\n  sonolint run --plugin build/Heft_artefacts/Release/VST3/Heft.vst3");
+
+    RunArgs updateArgs;
+    auto* baselineCommand = app.add_subcommand ("baseline", "Manage the baseline");
+    baselineCommand->require_subcommand (1);
+    auto* updateCommand = baselineCommand->add_subcommand ("update", "Run the scenarios and write their values as this platform's baseline");
+    addScenarioOptions (*updateCommand, updateArgs);
+    updateCommand->footer ("Example:\n  sonolint baseline update --plugin build/Heft_artefacts/Release/VST3/Heft.vst3");
 
     std::filesystem::path listPlugin;
     bool asJson = false;
@@ -203,6 +283,7 @@ int main (int argc, char* argv[])
     try
     {
         if (runCommand->parsed())     return run (runArgs);
+        if (updateCommand->parsed())  return updateBaseline (updateArgs);
         if (listCommand->parsed())    return listParams (listPlugin, asJson);
         if (renderCommand->parsed())  return render (renderArgs);
 

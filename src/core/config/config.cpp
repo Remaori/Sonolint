@@ -1,5 +1,6 @@
 #include "core/config/config.h"
 
+#include "core/compare/catalog.h"
 #include "core/config/text_match.h"
 #include "core/error.h"
 #include "core/io/path_text.h"
@@ -163,9 +164,9 @@ std::vector<std::string> allMetricPaths()
 {
     std::vector<std::string> paths;
 
-    for (const auto& [group, fields] : metricFields())
+    for (const auto& [group, fields] : metricCatalog())
         for (const auto& field : fields)
-            paths.push_back (group + "." + field);
+            paths.push_back (group + "." + field.name);
 
     return paths;
 }
@@ -174,7 +175,7 @@ std::vector<std::string> metricGroups()
 {
     std::vector<std::string> groups;
 
-    for (const auto& entry : metricFields())
+    for (const auto& entry : metricCatalog())
         groups.push_back (entry.first);
 
     return groups;
@@ -460,15 +461,16 @@ std::map<std::string, Expectation> parseExpect (const At& at, const std::vector<
         const auto dot   = path.find ('.');
         const auto group = path.substr (0, dot);
 
-        if (dot == std::string::npos || metricFields().count (group) == 0)
+        if (dot == std::string::npos || metricCatalog().count (group) == 0)
             fail (at.child (path), "unknown metric" + didYouMean (path, allMetricPaths()));
 
         if (std::find (metrics.begin(), metrics.end(), group) == metrics.end())
             fail (at.child (path), "this scenario doesn't measure " + group + "; add it to metrics");
 
-        const auto& fields = metricFields().at (group);
+        const auto& fields = metricCatalog().at (group);
+        const auto field   = path.substr (dot + 1);
 
-        if (std::find (fields.begin(), fields.end(), path.substr (dot + 1)) == fields.end())
+        if (std::none_of (fields.begin(), fields.end(), [&] (const FieldInfo& info) { return info.name == field; }))
             fail (at.child (path), "unknown metric" + didYouMean (path, allMetricPaths()));
 
         expect[path] = parseExpectation (at.child (path));
@@ -518,7 +520,7 @@ std::vector<std::string> parseMetrics (const At& at)
     {
         const auto name = text (at.item (i));
 
-        if (metricFields().count (name) == 0)
+        if (metricCatalog().count (name) == 0)
             fail (at.item (i), "unknown metric group \"" + name + "\"" + didYouMean (name, metricGroups()));
 
         if (std::find (metrics.begin(), metrics.end(), name) != metrics.end())
@@ -683,23 +685,6 @@ std::vector<Scenario> parseScenario (const At& at, const Scenario& defaults, con
 } // namespace
 
 //==============================================================================
-const std::map<std::string, std::vector<std::string>>& metricFields()
-{
-    static const std::map<std::string, std::vector<std::string>> fields {
-        { "level", { "peak_dbfs", "rms_dbfs", "gain_db", "dc" } },
-        { "true_peak", { "true_peak_dbtp", "sample_peak_dbfs" } },
-        { "harmonics", { "f0_hz", "thd_db", "thdn_db", "h_dbc" } },
-        { "aliasing", { "aliasing_dbc", "components", "skipped" } },
-        { "frequency_response", { "freqs_hz", "magnitude_db", "phase_deg", "gain_1k_db" } },
-        { "latency", { "reported_samples", "measured_samples", "mismatch_samples" } },
-        { "determinism", { "bit_identical", "max_diff_dbfs" } },
-        { "block_invariance", { "max_diff_dbfs", "rms_diff_dbfs" } },
-        { "cpu", { "realtime_factor", "core_percent", "p95_block_us" } },
-        { "silence", { "noise_floor_dbfs", "peak_dbfs" } } };
-
-    return fields;
-}
-
 Config parseConfig (const std::string& yaml, const std::filesystem::path& baseDir)
 {
     At root;

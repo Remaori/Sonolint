@@ -1,0 +1,18 @@
+# The same scenarios with 0.2 dB more gain. The level of the output moves by 0.2 dB:
+# outside a tolerance of 0.05 dB, inside one of 0.5 dB.
+version: 1
+
+scenarios:
+  - id: tight
+    params: { Gain: { text: "0.2 dB" } }
+    signal: { type: sine, freq_hz: 1000, level_dbfs: -6 }
+    metrics: [level]
+    tolerances:
+      level.gain_db: { abs: 0.05 }
+
+  - id: loose
+    params: { Gain: { text: "0.2 dB" } }
+    signal: { type: sine, freq_hz: 1000, level_dbfs: -6 }
+    metrics: [level]
+    tolerances:
+      level.*: { abs: 0.5 }

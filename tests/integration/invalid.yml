@@ -1,0 +1,7 @@
+# A typo in a key: the strict parser must refuse it.
+version: 1
+
+scenarios:
+  - id: typo
+    signal: { type: silence, duration_s: 1 }
+    metrcs: [silence]

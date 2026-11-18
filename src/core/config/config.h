@@ -97,7 +97,4 @@ SignalSpec parseSignalText (const std::string& text);
 
 // The scenarios whose id matches at least one of the globs. No globs: all of them.
 std::vector<Scenario> filterScenarios (const std::vector<Scenario>& scenarios, const std::vector<std::string>& globs);
-
-// The fields of each metric group, e.g. "level" -> gain_db, peak_dbfs...
-const std::map<std::string, std::vector<std::string>>& metricFields();
 } // namespace sonolint

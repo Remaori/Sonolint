@@ -1,4 +1,5 @@
 #include "core/analysis/spectrum.h"
+#include "core/compare/compare.h"
 #include "core/error.h"
 #include "core/report/summary.h"
 #include "core/runner/runner.h"
@@ -87,8 +88,8 @@ TEST_CASE ("runner: measures every channel and reports the worst one")
     CHECK_THAT (level["peak_dbfs"].get<double>(), WithinAbs (-6.0, 1.0e-3));
 
     CHECK (assertionOn (scenario, "level.gain_db")["passed"] == true);
-    CHECK (results["summary"] == json { { "pass", 1 }, { "assertion_failed", 0 }, { "error", 0 } });
-    CHECK_FALSE (sonolint::hasFailures (results));
+    CHECK (results["summary"]["pass"] == 1);
+    CHECK_FALSE (sonolint::fails (results, sonolint::FailOn::regressions));
 }
 
 TEST_CASE ("runner: a failed expectation fails the scenario and says what was measured")
@@ -105,10 +106,10 @@ TEST_CASE ("runner: a failed expectation fails the scenario and says what was me
     CHECK (scenario["status"] == "assertion_failed");
     CHECK (assertionOn (scenario, "level.gain_db")["passed"] == false);
     CHECK_THAT (assertionOn (scenario, "level.gain_db")["actual"].get<double>(), WithinAbs (-6.0206, 1.0e-3));
-    CHECK (sonolint::hasFailures (results));
+    CHECK (sonolint::fails (results, sonolint::FailOn::regressions));
 
-    CHECK (sonolint::formatSummary (results) == "FAIL   gain: level.gain_db is -6.0206, expected 0 within 0.05\n"
-                                                "1 scenarios: 0 pass, 1 assertion_failed, 0 error\n");
+    CHECK (sonolint::formatSummary (results) == "FAIL      gain: level.gain_db is -6.0206, expected 0 within 0.05\n"
+                                                "1 scenarios: 1 assertion_failed\n");
 }
 
 TEST_CASE ("runner: a NaN in the output is an error, and the other scenarios still run")
@@ -137,9 +138,10 @@ TEST_CASE ("runner: a NaN in the output is an error, and the other scenarios sti
     CHECK (results["scenarios"][0]["status"] == "error");
     CHECK (results["scenarios"][0]["error"] == "the output has NaN or infinite samples");
     CHECK (results["scenarios"][1]["status"] == "pass");
-    CHECK (results["summary"] == json { { "pass", 1 }, { "assertion_failed", 0 }, { "error", 1 } });
-    CHECK (sonolint::formatSummary (results) == "ERROR  broken: the output has NaN or infinite samples\n"
-                                                "2 scenarios: 1 pass, 0 assertion_failed, 1 error\n");
+    CHECK (results["summary"]["pass"] == 1);
+    CHECK (results["summary"]["error"] == 1);
+    CHECK (sonolint::formatSummary (results) == "ERROR     broken: the output has NaN or infinite samples\n"
+                                                "2 scenarios: 1 error, 1 pass\n");
 }
 
 TEST_CASE ("runner: the reported latency is taken off before measuring, and checked against the real one")
@@ -369,5 +371,5 @@ TEST_CASE ("runner: a sine whose harmonics all fold onto other content gets a wa
     CHECK (results["scenarios"][0]["warnings"].size() == 1);
     CHECK (results["scenarios"][0]["status"] == "pass");
     CHECK_FALSE (results["scenarios"][1].contains ("warnings"));
-    CHECK (sonolint::formatSummary (results).rfind ("WARN   bad-frequency: more than half of the folded harmonics", 0) == 0);
+    CHECK (sonolint::formatSummary (results).rfind ("WARN      bad-frequency: more than half of the folded harmonics", 0) == 0);
 }

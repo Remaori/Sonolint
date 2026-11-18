@@ -1,9 +1,9 @@
-# SonolintDelay delays by Delay samples and tells the host so.
+# SonolintFixture as Delay: it delays by Delay samples and tells the host so.
 version: 1
 
 scenarios:
   - id: honest
-    params: { Delay: { text: "37" } }
+    params: { Behaviour: { text: "Delay" }, Delay: { text: "37" } }
     signal: { type: impulse }
     metrics: [latency]
     expect:
@@ -11,7 +11,7 @@ scenarios:
       latency.measured_samples: { approx: 37.0, tol: 0.05 }
 
   - id: honest-noise
-    params: { Delay: { text: "480" } }
+    params: { Behaviour: { text: "Delay" }, Delay: { text: "480" } }
     signal: { type: white_noise, level_dbfs: -18, duration_s: 1 }
     metrics: [latency, level]
     expect:

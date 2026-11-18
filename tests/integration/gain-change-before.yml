@@ -1,0 +1,13 @@
+# The baseline for gain-change-after.yml: the Gain behaviour at 0 dB.
+version: 1
+
+scenarios:
+  - id: tight
+    params: { Gain: { text: "0 dB" } }
+    signal: { type: sine, freq_hz: 1000, level_dbfs: -6 }
+    metrics: [level]
+
+  - id: loose
+    params: { Gain: { text: "0 dB" } }
+    signal: { type: sine, freq_hz: 1000, level_dbfs: -6 }
+    metrics: [level]

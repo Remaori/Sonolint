@@ -1,0 +1,94 @@
+{
+  "platforms": {
+    "macos-arm64": {
+      "scenarios": {
+        "mono-response": {
+          "aliasing": [
+            {
+              "aliasing_dbc": -79.796,
+              "components": 23,
+              "skipped": 0
+            }
+          ],
+          "determinism": [
+            {
+              "bit_identical": true,
+              "max_diff_dbfs": -300.0
+            }
+          ],
+          "frequency_response": [
+            {
+              "freqs_hz": [
+                31.5,
+                1000.0,
+                16000.0
+              ],
+              "gain_1k_db": -3.01,
+              "magnitude_db": [
+                0.0,
+                -3.01,
+                -23.988
+              ],
+              "phase_deg": [
+                -0.25,
+                -45.0,
+                -180.0
+              ]
+            }
+          ],
+          "latency": [
+            {
+              "measured_samples": 121.368,
+              "mismatch_samples": -0.632,
+              "reported_samples": 122
+            }
+          ]
+        },
+        "stereo-1k": {
+          "harmonics": [
+            {
+              "f0_hz": 999.76,
+              "h_dbc": [
+                -40.0,
+                -60.0,
+                null
+              ],
+              "thd_db": -39.957,
+              "thdn_db": -39.95
+            },
+            {
+              "f0_hz": 999.76,
+              "h_dbc": [
+                -150.0,
+                -150.0,
+                null
+              ],
+              "thd_db": -150.0,
+              "thdn_db": -131.82
+            }
+          ],
+          "level": [
+            {
+              "dc": 1.23457e-05,
+              "gain_db": 0.0,
+              "peak_dbfs": -6.021,
+              "rms_dbfs": -9.031
+            },
+            {
+              "dc": -0.25,
+              "gain_db": -0.5,
+              "peak_dbfs": -6.521,
+              "rms_dbfs": -9.531
+            }
+          ]
+        }
+      }
+    }
+  },
+  "plugin": {
+    "name": "Example",
+    "version": "1.2.3"
+  },
+  "schema": "sonolint.baseline/v1",
+  "sonolint_version": "0.1.0"
+}

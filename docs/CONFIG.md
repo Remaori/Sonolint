@@ -177,10 +177,22 @@ the same field to replace one:
 
 ### `tolerances`
 
-For the comparison with a baseline. The key is the path of a field and may use `*`;
-the value has `abs`, `rel` or both, or `report_only: true` for a field that should
-never fail. They are read and checked now; the comparison itself arrives with the
-baseline.
+How far a field may move from the baseline before it counts as a change. The key is
+the path of a field and may use `*`; the value has `abs`, `rel` or both, and
+`report_only: true` for a field that should be shown but never fail:
+
+```yaml
+tolerances:
+  level.gain_db: { abs: 0.1 }
+  harmonics.*: { abs: 2.0, rel: 0.05 }
+  frequency_response.magnitude_db: { report_only: true }
+```
+
+A value passes when it is within `abs` + `rel` × |baseline| of the baseline. Each
+field starts from its default ([METRICS.md](METRICS.md#metric-groups)); then the
+top-level `tolerances` apply, then the scenario's own. Each one replaces only what it
+sets, so `{ rel: 0.02 }` keeps the default `abs`. When several keys match a field, the
+exact path wins, and otherwise the longest glob.
 
 ### `matrix`
 
@@ -201,20 +213,60 @@ its own name.
 # fat50@bs=64,sr=44100   fat50@bs=64,sr=96000   fat50@bs=512,sr=44100   fat50@bs=512,sr=96000
 ```
 
+## The baseline
+
+The baseline holds the accepted values of every scenario, in `sonolint/baseline.json`
+by default. Commit it next to `sonolint.yml`: an intentional change of sound then shows
+up as a diff in the pull request. Sonolint never rewrites it during a normal run.
+
+```text
+sonolint baseline update [--config sonolint.yml] [--plugin PATH] [--baseline sonolint/baseline.json] [--filter GLOB]...
+```
+
+It runs the scenarios and writes their values as the baseline of the platform it runs
+on (`windows-x64`, `macos-arm64` or `macos-x64`), leaving the other platforms alone.
+With `--filter` it replaces only the scenarios that match and keeps the rest. A
+scenario that ends in error keeps the values it had, and the command exits with 1.
+
+[METRICS.md](METRICS.md#comparison-with-the-baseline) describes what is stored and
+how each value is compared.
+
 ## Running
 
 ```text
-sonolint run [--config sonolint.yml] [--plugin PATH] [--out sonolint-out] [--filter GLOB]... [--verbose]
+sonolint run [--config sonolint.yml] [--plugin PATH] [--baseline sonolint/baseline.json] [--out sonolint-out]
+             [--filter GLOB]... [--fail-on regressions|assertions|none] [--no-compare] [--verbose]
 ```
 
 `--filter` keeps the scenarios whose id matches the glob (`*` and `?`), and can be
-repeated. The results go to `<out>/results.json`, and a summary of what didn't pass
-to the terminal.
+repeated. Scenarios of the baseline outside the filter are left out of the comparison.
+
+The results go to `<out>/results.json`, and to the terminal a line for each problem
+and the totals:
+
+```text
+CHANGED   fat50-1k: level.gain_db on channel 2 is -0.8, was 0 (-0.8); tolerance 0.05
+FAIL      robustness: latency.mismatch_samples is -10, expected from -1 to 1
+3 scenarios: 1 changed, 1 assertion_failed, 1 pass
+```
+
+Without a baseline file, or without values for this platform in it, every value is
+`new` and nothing fails. `--no-compare` skips the comparison altogether.
+
+`--fail-on` decides what makes the run fail:
+
+| `--fail-on` | Fails on |
+| --- | --- |
+| `regressions` (default) | errors, failed `expect` rules, and values that regressed or changed |
+| `assertions` | errors and failed `expect` rules |
+| `none` | nothing |
+
+Improved and removed values never fail; accept them with `sonolint baseline update`.
 
 | Exit code | Meaning |
 | --- | --- |
-| 0 | Every scenario passed |
-| 1 | A scenario failed an `expect` rule, gave NaN or infinity, or timed out |
-| 2 | The config or the command line is wrong |
+| 0 | Nothing fails under `--fail-on` |
+| 1 | Something fails under `--fail-on`, or a scenario timed out |
+| 2 | The config, the baseline file or the command line is wrong |
 | 3 | The plugin couldn't be loaded |
 | 4 | A bug in Sonolint |
