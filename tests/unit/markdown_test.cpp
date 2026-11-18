@@ -1,8 +1,10 @@
 #include "core/report/markdown.h"
+#include "core/signals/generators.h"
 #include "report_fixture.h"
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -80,4 +82,41 @@ TEST_CASE ("report.md: cells can't break the table")
     results["summary"] = sonolint::summarise (results["scenarios"]);
 
     CHECK (sonolint::formatMarkdown (results, {}).find ("| x |  |  | a \\| b c &lt;d> |  |  | error |") != std::string::npos);
+}
+
+TEST_CASE ("report.md: a chart of many points shows about 10 of them, always with the one that moved the most")
+{
+    auto results = test::reportResults();
+    auto& scenario = results["scenarios"][0];
+
+    // The 31 third-octave points, all 0 dB in the baseline; this run moved by 1 dB at 1 kHz.
+    const json freqs = sonolint::thirdOctaveFrequencies();
+    json actual = json::array(), baseline = json::array();
+
+    for (const auto& hz : freqs)
+    {
+        actual.push_back (hz == 1000.0 ? 1.0 : 0.0);
+        baseline.push_back (0.0);
+    }
+
+    for (auto& channel : scenario["metrics"]["frequency_response"]["per_channel"])
+    {
+        channel["freqs_hz"] = freqs;
+        channel["magnitude_db"] = actual;
+    }
+
+    for (auto& entry : scenario["comparison"])
+        if (entry["metric"] == "frequency_response.magnitude_db")
+        {
+            entry["actual"] = actual;
+            entry["baseline"] = baseline;
+        }
+
+    const auto text = sonolint::formatMarkdown (results, {});
+    const auto axis = text.substr (text.find ("x-axis"), text.find ('\n', text.find ("x-axis")) - text.find ("x-axis"));
+
+    CHECK (std::count (axis.begin(), axis.end(), ',') + 1 <= 12);
+    CHECK (axis.find ("\"1k\"") != std::string::npos);   // the point that moved
+    CHECK (axis.find ("\"20\"") != std::string::npos);   // the first one
+    CHECK (text.find ("of its 31 points; all of them are in the HTML report.") != std::string::npos);
 }

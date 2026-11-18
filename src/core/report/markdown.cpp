@@ -85,12 +85,31 @@ std::string responseChart (const std::string& id, const ChannelCurve& curve, con
     if (! actual.is_array() || ! baseline.is_array() || actual.size() != baseline.size() || freqs.size() != actual.size() || actual.empty())
         return {};   // a different number of points can't share one axis
 
+    // Mermaid writes a label under every point, and past about 12 they run into each
+    // other. Then it gets about 10, evenly spaced, plus the point that moved the most.
+    const auto count = actual.size();
+    std::vector<size_t> shown;
+    size_t most = 0;
+
+    for (size_t i = 0; i < count; ++i)
+        if (std::abs (actual[i].get<double>() - baseline[i].get<double>()) > std::abs (actual[most].get<double>() - baseline[most].get<double>()))
+            most = i;
+
+    for (size_t i = 0; i < count; i += count > 12 ? (count + 9) / 10 : 1)
+        shown.push_back (i);
+
+    if (shown.back() != count - 1)
+        shown.push_back (count - 1);
+
+    if (std::find (shown.begin(), shown.end(), most) == shown.end())
+        shown.insert (std::upper_bound (shown.begin(), shown.end(), most), most);
+
     double low = 0.0, high = 0.0;
     std::string labels, actualPoints, baselinePoints;
 
-    for (size_t i = 0; i < actual.size(); ++i)
+    for (const auto i : shown)
     {
-        const auto separator = i == 0 ? "" : ", ";
+        const auto separator = labels.empty() ? "" : ", ";
         labels += separator + ("\"" + frequencyLabel (freqs[i].get<double>()) + "\"");
         actualPoints += separator + showValue (actual[i]);
         baselinePoints += separator + showValue (baseline[i]);
@@ -98,7 +117,9 @@ std::string responseChart (const std::string& id, const ChannelCurve& curve, con
         high = std::max ({ high, actual[i].get<double>(), baseline[i].get<double>() });
     }
 
-    return "**Frequency response of " + id + ", " + showChannels (curve.channels) + ".** First line: this run. Second line: the baseline.\n\n"
+    const auto partial = shown.size() < count ? " " + std::to_string (shown.size()) + " of its " + std::to_string (count) + " points; all of them are in the HTML report." : "";
+
+    return "**Frequency response of " + id + ", " + showChannels (curve.channels) + ".** First line: this run. Second line: the baseline." + partial + "\n\n"
            "```mermaid\n"
            "xychart-beta\n"
            "    x-axis \"Frequency (Hz)\" [" + labels + "]\n"
