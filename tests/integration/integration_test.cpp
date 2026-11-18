@@ -74,17 +74,21 @@ struct Run
     }
 };
 
-// `sonolint run` with tests/integration/<config>.yml on the test plugin.
-Run run (const std::string& config)
+std::string configFile (const std::string& name) { return quoted (std::filesystem::path (SONOLINT_CONFIGS) / (name + ".yml")); }
+
+// `sonolint <command>` with tests/integration/<config>.yml on the test plugin. `run`
+// writes to its own folder, named after the config unless `out` says otherwise.
+// Without arguments for the baseline, nothing is compared.
+Run run (const std::string& config, const std::string& arguments = "--no-compare", const std::string& out = {})
 {
-    const auto out = std::filesystem::path (SONOLINT_OUT) / config;
-    std::filesystem::remove_all (out);
+    const auto folder = std::filesystem::path (SONOLINT_OUT) / (out.empty() ? config : out);
+    std::filesystem::remove_all (folder);
 
     Run result;
-    result.exitCode = runSonolint ("run --config " + quoted (std::filesystem::path (SONOLINT_CONFIGS) / (config + ".yml")) + " --plugin "
-                                + quoted (fixture()) + " --out " + quoted (out));
+    result.exitCode = runSonolint ("run --config " + configFile (config) + " --plugin " + quoted (fixture()) + " --out " + quoted (folder)
+                                   + " " + arguments);
 
-    if (std::ifstream file (out / "results.json"); file)
+    if (std::ifstream file (folder / "results.json"); file)
         result.results = json::parse (file);
 
     return result;
@@ -97,7 +101,7 @@ TEST_CASE ("Gain: the gain is exact, with no distortion and no latency")
 
     CHECK (gain.exitCode == 0);
     CHECK (gain.results["plugin"]["name"] == "SonolintFixture");
-    CHECK (gain.results["summary"] == json { { "pass", 4 }, { "assertion_failed", 0 }, { "error", 0 } });
+    CHECK (gain.results["summary"]["pass"] == 4);
 
     // The expectations are in gain.yml; these are a second look at the numbers themselves.
     CHECK_THAT (gain.scenario ("minus-6-db")["metrics"]["level"]["gain_db"].get<double>(), WithinAbs (-6.0, 0.001));
@@ -171,7 +175,9 @@ TEST_CASE ("Buggy: each bug fails its own check and no other")
     const auto buggy = run ("buggy");
 
     CHECK (buggy.exitCode == 1);
-    CHECK (buggy.results["summary"] == json { { "pass", 3 }, { "assertion_failed", 3 }, { "error", 1 } });
+    CHECK (buggy.results["summary"]["pass"] == 3);
+    CHECK (buggy.results["summary"]["assertion_failed"] == 3);
+    CHECK (buggy.results["summary"]["error"] == 1);
 
     CHECK (buggy.scenario ("clean")["status"] == "pass");
     CHECK (buggy.scenario ("clean-silence")["status"] == "pass");
@@ -202,4 +208,99 @@ TEST_CASE ("sonolint render writes what came out of the plugin to a WAV file")
 
     // A sine at -6 dBFS through -6 dB of gain peaks at -12 dBFS: 0.2512.
     CHECK_THAT (audio.channels[0][12 + 4800], WithinAbs (0.2512, 0.0005));
+}
+
+TEST_CASE ("Baseline: without one every value is new, and after baseline update the same run passes")
+{
+    const auto baseline = std::filesystem::path (SONOLINT_OUT) / "baseline-flow" / "baseline.json";
+    std::filesystem::remove_all (baseline.parent_path());
+    const auto withBaseline = "--baseline " + quoted (baseline);
+
+    const auto first = run ("gain", withBaseline, "gain-first");
+    CHECK (first.exitCode == 0);
+    CHECK (first.results["summary"]["new"] == 4);
+    CHECK (first.results["baseline"]["file"].is_string());
+
+    CHECK (runSonolint ("baseline update --config " + configFile ("gain") + " --plugin " + quoted (fixture()) + " " + withBaseline) == 0);
+
+    std::ifstream file (baseline, std::ios::binary);
+    REQUIRE (file);
+    const auto stored = json::parse (file);
+    CHECK (stored["schema"] == "sonolint.baseline/v1");
+    CHECK (stored["plugin"]["name"] == "SonolintFixture");
+    CHECK (stored["platforms"].size() == 1);
+    CHECK (stored["platforms"].begin()->at ("scenarios").size() == 4);
+
+    const auto second = run ("gain", withBaseline, "gain-second");
+    CHECK (second.exitCode == 0);
+    CHECK (second.results["summary"]["pass"] == 4);
+
+    for (const auto& scenario : second.results["scenarios"])
+        for (const auto& entry : scenario["comparison"])
+        {
+            CAPTURE (scenario["id"], entry["metric"]);
+            CHECK (entry["status"] == "pass");
+        }
+}
+
+TEST_CASE ("Baseline: 0.2 dB more gain fails with a tolerance of 0.05 dB and passes with 0.5 dB")
+{
+    const auto baseline = std::filesystem::path (SONOLINT_OUT) / "baseline-gain" / "baseline.json";
+    std::filesystem::remove_all (baseline.parent_path());
+    const auto withBaseline = "--baseline " + quoted (baseline);
+
+    REQUIRE (runSonolint ("baseline update --config " + configFile ("gain-change-before") + " --plugin " + quoted (fixture()) + " "
+                          + withBaseline) == 0);
+
+    const auto tight = run ("gain-change-after", withBaseline + " --filter tight", "gain-tight");
+    CHECK (tight.exitCode == 1);
+    CHECK (tight.scenario ("tight")["status"] == "changed");
+
+    for (const auto& entry : tight.scenario ("tight")["comparison"])
+        if (entry["metric"] == "level.gain_db")
+        {
+            CHECK (entry["status"] == "changed");
+            CHECK_THAT (entry["delta"].get<double>(), WithinAbs (0.2, 0.001));
+        }
+
+    const auto loose = run ("gain-change-after", withBaseline + " --filter loose", "gain-loose");
+    CHECK (loose.exitCode == 0);
+    CHECK (loose.scenario ("loose")["status"] == "pass");
+    CHECK (loose.results["summary"]["removed"] == 0);   // tight is outside the filter, not gone
+
+    // The same change, with other policies.
+    CHECK (run ("gain-change-after", withBaseline + " --filter tight --fail-on assertions", "gain-assertions").exitCode == 0);
+    CHECK (run ("gain-change-after", withBaseline + " --filter tight --fail-on none", "gain-none").exitCode == 0);
+}
+
+TEST_CASE ("Exit codes: a plugin that doesn't exist is 3 and a wrong config is 2")
+{
+    const auto out = quoted (std::filesystem::path (SONOLINT_OUT) / "exit-codes");
+
+    CHECK (runSonolint ("run --config " + configFile ("gain") + " --plugin " + quoted (std::filesystem::path (SONOLINT_OUT) / "missing.vst3")
+                        + " --no-compare --out " + out) == 3);
+    CHECK (runSonolint ("run --config " + configFile ("invalid") + " --plugin " + quoted (fixture()) + " --no-compare --out " + out) == 2);
+    CHECK (runSonolint ("run --config " + configFile ("gain") + " --plugin " + quoted (fixture()) + " --fail-on sometimes --out " + out) == 2);
+}
+
+TEST_CASE ("Reproducibility: two runs write the same results, apart from the machine and the times")
+{
+    const auto withoutTimes = [] (json results)
+    {
+        results.erase ("environment");
+
+        for (auto& scenario : results["scenarios"])
+        {
+            scenario.erase ("seconds");
+            scenario["metrics"].erase ("cpu");
+        }
+
+        return results;
+    };
+
+    const auto first = run ("gain", "--no-compare", "repeat-1");
+    const auto second = run ("gain", "--no-compare", "repeat-2");
+
+    REQUIRE (first.results.is_object());
+    CHECK (withoutTimes (first.results) == withoutTimes (second.results));
 }
