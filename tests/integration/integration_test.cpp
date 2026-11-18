@@ -1,4 +1,4 @@
-// Runs the real `sonolint` binary against the test plugins and reads what it wrote.
+// Runs the real `sonolint` binary against the test plugin and reads what it wrote.
 // The paths come from CMake as compile definitions.
 #include "core/io/wav.h"
 
@@ -27,9 +27,9 @@ namespace
 // In quotes and with the separators of this system, ready for a command line.
 std::string quoted (std::filesystem::path path) { return "\"" + path.make_preferred().string() + "\""; }
 
-std::filesystem::path fixture (const std::string& name)
+std::filesystem::path fixture()
 {
-    return std::filesystem::path (SONOLINT_FIXTURES) / (name + "_artefacts") / SONOLINT_BUILD_CONFIG / "VST3" / (name + ".vst3");
+    return std::filesystem::path (SONOLINT_FIXTURES) / "SonolintFixture_artefacts" / SONOLINT_BUILD_CONFIG / "VST3" / "SonolintFixture.vst3";
 }
 
 // Runs `sonolint <arguments>` and returns its exit code.
@@ -74,15 +74,15 @@ struct Run
     }
 };
 
-// `sonolint run` with tests/integration/<config>.yml on one of the test plugins.
-Run run (const std::string& config, const std::string& plugin)
+// `sonolint run` with tests/integration/<config>.yml on the test plugin.
+Run run (const std::string& config)
 {
     const auto out = std::filesystem::path (SONOLINT_OUT) / config;
     std::filesystem::remove_all (out);
 
     Run result;
     result.exitCode = runSonolint ("run --config " + quoted (std::filesystem::path (SONOLINT_CONFIGS) / (config + ".yml")) + " --plugin "
-                                + quoted (fixture (plugin)) + " --out " + quoted (out));
+                                + quoted (fixture()) + " --out " + quoted (out));
 
     if (std::ifstream file (out / "results.json"); file)
         result.results = json::parse (file);
@@ -91,12 +91,12 @@ Run run (const std::string& config, const std::string& plugin)
 }
 } // namespace
 
-TEST_CASE ("SonolintGain: the gain is exact, with no distortion and no latency")
+TEST_CASE ("Gain: the gain is exact, with no distortion and no latency")
 {
-    const auto gain = run ("gain", "SonolintGain");
+    const auto gain = run ("gain");
 
     CHECK (gain.exitCode == 0);
-    CHECK (gain.results["plugin"]["name"] == "SonolintGain");
+    CHECK (gain.results["plugin"]["name"] == "SonolintFixture");
     CHECK (gain.results["summary"] == json { { "pass", 4 }, { "assertion_failed", 0 }, { "error", 0 } });
 
     // The expectations are in gain.yml; these are a second look at the numbers themselves.
@@ -106,16 +106,16 @@ TEST_CASE ("SonolintGain: the gain is exact, with no distortion and no latency")
     CHECK (gain.scenario ("mono")["metrics"]["level"]["per_channel"].size() == 1);
 }
 
-TEST_CASE ("SonolintDelay: the real delay matches the reported one, and a lie is caught")
+TEST_CASE ("Delay: the real delay matches the reported one, and a lie is caught")
 {
-    const auto honest = run ("delay", "SonolintDelay");
+    const auto honest = run ("delay");
 
     CHECK (honest.exitCode == 0);
     CHECK (honest.scenario ("honest")["metrics"]["latency"]["reported_samples"] == 37);
     CHECK_THAT (honest.scenario ("honest")["metrics"]["latency"]["mismatch_samples"].get<double>(), WithinAbs (0.0, 0.05));
     CHECK (honest.scenario ("honest-noise")["status"] == "pass");
 
-    const auto lie = run ("delay-lie", "SonolintDelay");
+    const auto lie = run ("delay-lie");
 
     CHECK (lie.exitCode == 1);
     CHECK (lie.scenario ("lying")["status"] == "assertion_failed");
@@ -123,9 +123,9 @@ TEST_CASE ("SonolintDelay: the real delay matches the reported one, and a lie is
     CHECK_THAT (lie.scenario ("lying")["metrics"]["latency"]["mismatch_samples"].get<double>(), WithinAbs (-10.0, 0.05));
 }
 
-TEST_CASE ("SonolintClipper: odd harmonics only, and 4x oversampling takes more than 20 dB off the aliasing")
+TEST_CASE ("Clipper: odd harmonics only, and 4x oversampling takes more than 20 dB off the aliasing")
 {
-    const auto clipper = run ("clipper", "SonolintClipper");
+    const auto clipper = run ("clipper");
 
     CHECK (clipper.exitCode == 0);
 
@@ -141,16 +141,16 @@ TEST_CASE ("SonolintClipper: odd harmonics only, and 4x oversampling takes more 
     CHECK (at1x - at4x > 20.0);
 }
 
-TEST_CASE ("SonolintFilter: the measured response is the formula of a first-order low-pass")
+TEST_CASE ("Filter: the measured response is the formula of a first-order low-pass")
 {
-    const auto filter = run ("filter", "SonolintFilter");
+    const auto filter = run ("filter");
 
     CHECK (filter.exitCode == 0);
 
     const auto& response = filter.scenario ("response")["metrics"]["frequency_response"];
     REQUIRE (response["freqs_hz"].size() == 31);
 
-    // H (z) = b (1 + z^-1) / (1 + a z^-1), with the coefficients of SonolintFilter.cpp at 1 kHz and 48 kHz.
+    // H (z) = b (1 + z^-1) / (1 + a z^-1), with the coefficients of the Filter behaviour at 1 kHz and 48 kHz.
     const auto k = std::tan (std::numbers::pi * 1000.0 / 48000.0);
     const auto b = k / (1.0 + k), a = (k - 1.0) / (k + 1.0);
 
@@ -166,9 +166,9 @@ TEST_CASE ("SonolintFilter: the measured response is the formula of a first-orde
     }
 }
 
-TEST_CASE ("SonolintBuggy: each bug fails its own check and no other")
+TEST_CASE ("Buggy: each bug fails its own check and no other")
 {
-    const auto buggy = run ("buggy", "SonolintBuggy");
+    const auto buggy = run ("buggy");
 
     CHECK (buggy.exitCode == 1);
     CHECK (buggy.results["summary"] == json { { "pass", 3 }, { "assertion_failed", 3 }, { "error", 1 } });
@@ -191,7 +191,7 @@ TEST_CASE ("sonolint render writes what came out of the plugin to a WAV file")
     std::filesystem::create_directories (out.parent_path());
     std::filesystem::remove (out);
 
-    const auto exitCode = runSonolint ("render --plugin " + quoted (fixture ("SonolintGain")) + " --signal sine:freq_hz=1000,level_dbfs=-6"
+    const auto exitCode = runSonolint ("render --plugin " + quoted (fixture()) + " --signal sine:freq_hz=1000,level_dbfs=-6"
                                     + " --param \"Gain=-6 dB\" --out " + quoted (out));
     REQUIRE (exitCode == 0);
 

@@ -1,19 +1,19 @@
-# SonolintClipper clips hard. A sine at 9973 Hz puts every harmonic from the third up
+# SonolintFixture as Clipper clips hard. A sine at 9973 Hz puts every harmonic from the third up
 # above half the sample rate, so at 1x they all fold back.
 version: 1
 
 scenarios:
   - id: odd-harmonics
-    params: { Threshold: { text: "-12 dB" } }
+    params: { Behaviour: { text: "Clipper" }, Threshold: { text: "-12 dB" } }
     signal: { type: sine, freq_hz: 1000, level_dbfs: -6 }
     metrics: [harmonics]
 
   - id: aliasing-1x
-    params: { Threshold: { text: "-9 dB" }, Oversample: { text: "1x" } }
+    params: { Behaviour: { text: "Clipper" }, Threshold: { text: "-9 dB" }, Oversample: { text: "1x" } }
     signal: { type: sine, freq_hz: 9973, level_dbfs: -6 }
     metrics: [aliasing]
 
   - id: aliasing-4x
-    params: { Threshold: { text: "-9 dB" }, Oversample: { text: "4x" } }
+    params: { Behaviour: { text: "Clipper" }, Threshold: { text: "-9 dB" }, Oversample: { text: "4x" } }
     signal: { type: sine, freq_hz: 9973, level_dbfs: -6 }
     metrics: [aliasing]

@@ -65,5 +65,5 @@ The main thread acts as JUCE's message thread and no message loop runs
 | Kind | Folder | What it checks |
 | --- | --- | --- |
 | Unit | `tests/unit/` | The core alone, against cases with a known answer and with a fake renderer |
-| Test plugins | `tests/fixtures/` | Five minimal VST3 effects whose behaviour is known exactly |
-| Integration | `tests/integration/` | The real binary run against the test plugins, reading the `results.json` it writes |
+| Test plugin | `tests/fixtures/` | A minimal VST3 effect with five behaviours whose results are known exactly ([ADR 0020](adr/0020-one-test-plugin.md)) |
+| Integration | `tests/integration/` | The real binary run against the test plugin, reading the `results.json` it writes |
