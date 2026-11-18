@@ -187,3 +187,41 @@ build over them.
 
 With silence as the input: `noise_floor_dbfs` is the RMS of the output and `peak_dbfs`
 its largest sample. They catch noise added by the plugin and self-oscillation.
+
+## Comparison with the baseline
+
+`sonolint baseline update` stores the values of each scenario, and `sonolint run`
+compares the new ones with them field by field.
+
+**What is stored.** Every field of every group except `cpu`, which depends on the
+machine and its load. Each channel is stored on its own, in order: the value reported
+for the worst channel is only for showing. Values are rounded: dB, samples and degrees
+to 3 decimals, Hz to 2, linear values (`dc`) to 6 significant figures; counts and
+yes/no as they are. Nothing that changes from run to run is stored: no times, no paths.
+
+**How a value is compared**, channel by channel:
+
+1. The new value is rounded the same way, so a run that matches the baseline compares
+   equal.
+2. dB values below −130 dB are raised to −130 dB on both sides: numerical noise in a
+   transparent plugin isn't a change.
+3. It passes when |new − baseline| ≤ `abs` + `rel` × |baseline|. A phase difference
+   is first wrapped to ±180°, so 179° and −179° are 2° apart.
+4. Otherwise, for a `lower` field it is `improved` if it went down and `regressed` if
+   it went up; for a `target` field it is `changed`.
+5. Curves go point by point and take the worst point; a different number of points is
+   `changed`. Yes/no values and points without a value must be equal.
+6. A value that isn't in the baseline is `new`; one in the baseline that isn't measured
+   any more is `removed`. Renaming a scenario gives one of each.
+
+`report` fields (`phase_deg`, and any field with `report_only` in the config) are
+compared and shown, but never change the status of the scenario. `cpu` is shown in the
+results and never compared.
+
+**The status of a scenario** is the worst of its values and its `expect` rules, in this
+order: `error` > `regressed` = `changed` > `assertion_failed` > `removed` > `improved` >
+`new` > `pass`. A scenario of the baseline that no longer runs is `removed`.
+
+**Known limit.** Every channel gets the same signal, so a plugin that swaps left and
+right gives the same values and the swap goes unnoticed. Different signals per
+channel are planned for v0.2.

@@ -25,5 +25,13 @@ The first version, 0.1.0, is in development. So far:
   depends on the block size fail without any rule being written.
 - `sonolint render` sends one signal through the plugin and writes the result to a WAV
   file, to listen to what was measured.
+- **Baseline:** `sonolint baseline update` stores the accepted values of every scenario
+  in `sonolint/baseline.json`, one section per platform. Commit it: an intentional
+  change of sound then shows up in the pull request.
+- `sonolint run` compares each value with the baseline, channel by channel, and reports
+  it as `pass`, `new`, `improved`, `regressed`, `changed` or `removed`. A regression or
+  a change fails the run; `--fail-on assertions` or `--fail-on none` relax that, and
+  `--no-compare` skips the comparison.
+- The `tolerances` of `sonolint.yml` now take effect.
 - Builds and tests with one command on Windows x64 (`cmake --workflow --preset windows`,
   or `.\build.ps1`) and on macOS as a universal binary (`cmake --workflow --preset macos`).
