@@ -235,18 +235,22 @@ how each value is compared.
 
 ```text
 sonolint run [--config sonolint.yml] [--plugin PATH] [--baseline sonolint/baseline.json] [--out sonolint-out]
-             [--filter GLOB]... [--fail-on regressions|assertions|none] [--no-compare] [--verbose]
+             [--filter GLOB]... [--fail-on regressions|assertions|none] [--no-compare]
+             [--format md,html,json,junit] [--save-audio] [--artifact-url URL] [--commit SHA] [--merged-into BRANCH]
+             [--verbose]
 ```
 
 `--filter` keeps the scenarios whose id matches the glob (`*` and `?`), and can be
 repeated. Scenarios of the baseline outside the filter are left out of the comparison.
 
-The results go to `<out>/results.json`, and to the terminal a line for each problem
-and the totals:
+The terminal shows a table of the scenarios that didn't pass, one line per problem,
+and the totals. Statuses are coloured when the output is a terminal and `NO_COLOR`
+isn't set.
 
 ```text
-CHANGED   fat50-1k: level.gain_db on channel 2 is -0.8, was 0 (-0.8); tolerance 0.05
-FAIL      robustness: latency.mismatch_samples is -10, expected from -1 to 1
+SCENARIO    STATUS            WHAT
+fat50-1k    changed           level.gain_db (channel 2): -0.8, was 0 (-0.8; tolerance 0.05)
+robustness  assertion_failed  latency.mismatch_samples: is -10, expected from -1 to 1
 3 scenarios: 1 changed, 1 assertion_failed, 1 pass
 ```
 
@@ -262,6 +266,30 @@ Without a baseline file, or without values for this platform in it, every value 
 | `none` | nothing |
 
 Improved and removed values never fail; accept them with `sonolint baseline update`.
+
+### Reports
+
+Every run writes these files to `--out`; `--format` chooses which (all four by
+default). The GitHub Action needs `json`.
+
+| File | `--format` | For | Contents |
+| --- | --- | --- | --- |
+| `results.json` | `json` | machines | Everything: the settings of each scenario, every metric per channel, the rules, the comparison, the machine and the times |
+| `report.md` | `md` | the pull request comment and the job summary | The totals, a table of what didn't pass (worst first), a Mermaid chart of each frequency response that changed, every scenario in a folded block, and a footer |
+| `report.html` | `html` | a closer look | One page that opens without internet, in a light and a dark theme: each scenario's settings, rules and values against the baseline, and its charts (frequency response, harmonics H2 to H10) |
+| `junit.xml` | `junit` | test viewers of CI | A test suite per scenario and a test case per compared value or rule. Regressions, changes and failed rules are failures, errors are errors, anything removed is skipped |
+| `audio/<id>.input.wav`, `audio/<id>.output.wav` | `--save-audio` | listening | The input and the raw output (with the plugin's latency and the tail) of each scenario, as 32-bit float |
+
+`report.md` stays under 60 000 characters, so it fits in a GitHub comment: past that,
+the folded block is cut first, then the charts; the table of what didn't pass never
+is. In the charts and the HTML, channels whose values are within the tolerance of each
+other are drawn once.
+
+The footer of `report.md` and `report.html` takes what the run can't know: the link to
+the full report (`--artifact-url`), the commit measured (`--commit`, a full SHA is
+shortened) and the branch it was merged into before measuring (`--merged-into`), shown
+as `Commit abc1234 (merged into main)`. Sonolint reads nothing from the CI itself; the
+Action passes these.
 
 | Exit code | Meaning |
 | --- | --- |

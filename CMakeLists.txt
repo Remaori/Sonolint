@@ -173,7 +173,7 @@ target_include_directories(sonolint-host
 juce_add_console_app(sonolint-cli PRODUCT_NAME "sonolint")
 set_target_properties(sonolint-cli PROPERTIES OUTPUT_NAME sonolint)   # PRODUCT_NAME doesn't rename a console app
 
-target_sources(sonolint-cli PRIVATE src/cli/main.cpp)
+target_sources(sonolint-cli PRIVATE src/cli/main.cpp src/cli/terminal.cpp)
 
 target_link_libraries(sonolint-cli
     PRIVATE

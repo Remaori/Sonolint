@@ -1,12 +1,9 @@
 #include "core/report/summary.h"
 
 #include "core/compare/compare.h"
+#include "core/report/describe.h"
 
 #include <algorithm>
-#include <cctype>
-#include <iomanip>
-#include <locale>
-#include <sstream>
 
 namespace sonolint
 {
@@ -14,99 +11,63 @@ namespace
 {
 using json = nlohmann::json;
 
-std::string show (const json& value)
+std::string padded (const std::string& text, size_t width) { return text + std::string (width - std::min (width, text.size()), ' '); }
+
+std::string painted (const std::string& text, const std::string& status)
 {
-    if (! value.is_number_float())
-        return value.dump();
-
-    std::ostringstream out;
-    out.imbue (std::locale::classic());
-    out << std::setprecision (6) << value.get<double>();
-    return out.str();
-}
-
-std::string signedText (double value) { return (value > 0.0 ? "+" : "") + show (value); }
-
-// The word at the start of a line, padded so the ids line up.
-std::string label (const std::string& word) { return word + std::string (10 - word.size(), ' '); }
-
-std::string expected (const json& rule)
-{
-    if (rule.contains ("approx"))   return show (rule["approx"]) + " within " + show (rule["tol"]);
-    if (rule.contains ("min"))      return "at least " + show (rule["min"]);
-    if (rule.contains ("max"))      return "at most " + show (rule["max"]);
-    if (rule.contains ("between"))  return "from " + show (rule["between"][0]) + " to " + show (rule["between"][1]);
-
-    return show (rule["equals"]);
-}
-
-// A value that moved beyond its tolerance: what it is, what it was and by how much.
-std::string movement (const json& entry)
-{
-    const auto& actual = entry.at ("actual");
-    const auto& baseline = entry.at ("baseline");
-    auto text = entry.at ("metric").get<std::string>() + " on channel " + std::to_string (entry.at ("channel").get<int>());
-
-    if (actual.is_array() && baseline.is_array() && actual.size() != baseline.size())
-        return text + " has " + std::to_string (actual.size()) + " points and the baseline " + std::to_string (baseline.size());
-
-    if (actual.is_array())
-        text += " moved at " + std::to_string (entry.at ("points_outside").get<int>()) + " of " + std::to_string (actual.size())
-              + " points, the most by " + signedText (entry.at ("delta").get<double>());
-    else
-        text += " is " + show (actual) + ", was " + show (baseline)
-              + (entry.contains ("delta") ? " (" + signedText (entry["delta"].get<double>()) + ")" : "");
-
-    if (! entry.contains ("delta"))
-        return text;   // yes/no values have no tolerance
-
-    const auto& tolerance = entry.at ("tolerance");
-
-    return text + "; tolerance " + show (tolerance.at ("abs"))
-         + (tolerance.at ("rel").get<double>() > 0.0 ? " + " + show (100.0 * tolerance.at ("rel").get<double>()) + " % of the baseline" : "");
+    const auto* code = status == "improved"                                        ? "\x1b[32m"    // green
+                     : status == "removed" || status == "pass" || status == "new"  ? "\x1b[33m"    // yellow: only a warning brings these here
+                                                                                   : "\x1b[31m";   // red
+    return code + text + "\x1b[0m";
 }
 } // namespace
 
-std::string formatSummary (const json& results)
+std::string formatSummary (const json& results, bool colour)
 {
-    std::string text;
+    struct Row
+    {
+        std::string id, status;
+        std::vector<std::string> lines;
+    };
+
+    std::vector<Row> rows;
 
     for (const auto& scenario : results.at ("scenarios"))
     {
-        const auto id = scenario.at ("id").get<std::string>();
-        const auto status = scenario.at ("status").get<std::string>();
+        Row row { scenario.at ("id").get<std::string>(), scenario.at ("status").get<std::string>(), {} };
 
         for (const auto& warning : scenario.value ("warnings", json::array()))
-            text += label ("WARN") + id + ": " + warning.get<std::string>() + "\n";
+            row.lines.push_back ("warning: " + warning.get<std::string>());
 
-        if (status == "error")
-            text += label ("ERROR") + id + ": " + scenario.at ("error").get<std::string>() + "\n";
+        for (const auto& problem : problemsOf (scenario))
+            row.lines.push_back (problem.metric.empty() ? problem.text : problem.metric + ": " + problem.text);
 
-        if (status == "removed")
-            text += label ("REMOVED") + id + ": in the baseline, but no longer in the config\n";
+        if (! row.lines.empty())
+            rows.push_back (std::move (row));
+    }
 
-        for (const auto& assertion : scenario.value ("assertions", json::array()))
+    std::string text;
+
+    if (! rows.empty())
+    {
+        size_t idWidth = 8, statusWidth = 6;   // "SCENARIO", "STATUS"
+
+        for (const auto& row : rows)
         {
-            if (assertion.at ("passed").get<bool>())
-                continue;
-
-            const auto& actual = assertion.at ("actual");
-
-            text += label ("FAIL") + id + ": " + assertion.at ("metric").get<std::string>()
-                  + (actual.is_array() ? " has points outside: expected " : " is " + show (actual) + ", expected ")
-                  + expected (assertion.at ("rule")) + "\n";
+            idWidth = std::max (idWidth, row.id.size());
+            statusWidth = std::max (statusWidth, row.status.size());
         }
 
-        for (const auto& entry : scenario.value ("comparison", json::array()))
+        text += padded ("SCENARIO", idWidth) + "  " + padded ("STATUS", statusWidth) + "  WHAT\n";
+
+        for (const auto& row : rows)
         {
-            const auto moved = entry.at ("status").get<std::string>();
-
-            if (moved != "regressed" && moved != "changed" && moved != "improved")
-                continue;
-
-            std::string word = moved;
-            std::transform (word.begin(), word.end(), word.begin(), [] (char c) { return (char) std::toupper (c); });
-            text += label (entry.value ("report_only", false) ? "INFO" : word) + id + ": " + movement (entry) + "\n";
+            for (size_t i = 0; i < row.lines.size(); ++i)
+            {
+                const auto status = padded (i == 0 ? row.status : "", statusWidth);
+                text += padded (i == 0 ? row.id : "", idWidth) + "  " + (colour && i == 0 ? painted (status, row.status) : status) + "  "
+                      + row.lines[i] + "\n";
+            }
         }
     }
 

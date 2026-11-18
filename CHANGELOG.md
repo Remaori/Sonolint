@@ -33,5 +33,14 @@ The first version, 0.1.0, is in development. So far:
   a change fails the run; `--fail-on assertions` or `--fail-on none` relax that, and
   `--no-compare` skips the comparison.
 - The `tolerances` of `sonolint.yml` now take effect.
+- **Reports:** besides `results.json`, every run writes `report.md` (for the pull request
+  comment, with a chart of each frequency response that changed), `report.html` (one page
+  that opens without internet, light and dark, with the frequency response and the
+  harmonics of each scenario against the baseline) and `junit.xml` (for test viewers).
+  `--format` chooses which.
+- The terminal shows a table of the scenarios that didn't pass, coloured in a terminal
+  (set `NO_COLOR` to turn colour off).
+- `--save-audio` writes the input and the output of every scenario as WAV files.
+- `--artifact-url`, `--commit` and `--merged-into` fill the footer of the reports.
 - Builds and tests with one command on Windows x64 (`cmake --workflow --preset windows`,
   or `.\build.ps1`) and on macOS as a universal binary (`cmake --workflow --preset macos`).

@@ -37,7 +37,7 @@ builds it with `-DSONOLINT_CORE_ONLY=ON`, which never downloads JUCE.
 | `analysis/` | One file per metric group, plus the FFT and what they share |
 | `runner/` | The `Renderer` interface and the runner that drives a scenario from signal to result |
 | `compare/` | The catalog of fields with their units, directions and tolerances; the baseline file; the comparison and the statuses |
-| `report/` | What is printed: the summary of a run, the parameter list |
+| `report/` | What is written for people and tools: the terminal table, `report.md`, `report.html` with its SVG charts, `junit.xml`, the parameter list |
 | `io/` | WAV files |
 
 ## What `sonolint run` does
@@ -56,7 +56,8 @@ builds it with `-DSONOLINT_CORE_ONLY=ON`, which never downloads JUCE.
    6. evaluates the `expect` rules.
 4. Compares every value with the baseline, channel by channel, and gives each
    scenario its status.
-5. Writes `results.json`, prints what didn't pass and exits according to `--fail-on`.
+5. Writes the reports that `--format` asks for, prints what didn't pass and exits
+   according to `--fail-on`. Every report is made from the results alone.
 
 `sonolint baseline update` does steps 1 to 3 and writes the values as the baseline of
 the platform it runs on.

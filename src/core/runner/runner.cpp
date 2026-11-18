@@ -369,7 +369,7 @@ struct Measurement
     }
 };
 
-json runScenario (const Scenario& scenario, Renderer& renderer)
+json runScenario (const Scenario& scenario, Renderer& renderer, const RunOptions& options)
 {
     const auto snap = measures (scenario, "harmonics") || measures (scenario, "aliasing");
 
@@ -387,6 +387,9 @@ json runScenario (const Scenario& scenario, Renderer& renderer)
     m.request.tailSamples        = (int) toSamples (scenario.tailMs, scenario.sampleRate);
 
     m.main = renderer.render (m.request);
+
+    if (options.onAudio)
+        options.onAudio (scenario.id, m.signal.audio, m.main.output);
 
     if (m.main.output.channels.size() != m.signal.audio.channels.size())
         throw Error (ErrorCode::internal, "the renderer returned " + std::to_string (m.main.output.channels.size()) + " channels for "
@@ -610,7 +613,7 @@ json runScenarios (const std::vector<Scenario>& scenarios, const PluginInfo& plu
 
         try
         {
-            entry.update (runScenario (scenario, renderer));
+            entry.update (runScenario (scenario, renderer, options));
         }
         catch (const Error& e)
         {

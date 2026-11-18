@@ -5,6 +5,10 @@
 #include "core/io/path_text.h"
 #include "core/io/wav.h"
 #include "core/platform.h"
+#include "cli/terminal.h"
+#include "core/report/html.h"
+#include "core/report/junit.h"
+#include "core/report/markdown.h"
 #include "core/report/param_list.h"
 #include "core/report/summary.h"
 #include "core/runner/runner.h"
@@ -14,10 +18,12 @@
 #include <CLI/CLI.hpp>
 #include <juce_events/juce_events.h>
 
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 
 namespace
 {
@@ -29,8 +35,8 @@ struct RunArgs
 {
     std::filesystem::path config = "sonolint.yml", plugin, out = "sonolint-out", baseline = "sonolint/baseline.json";
     std::vector<std::string> filters;
-    std::string failOn = "regressions";
-    bool verbose = false, noCompare = false;
+    std::string failOn = "regressions", formats = "md,html,json,junit", artifactUrl, commit, mergedInto;
+    bool verbose = false, noCompare = false, saveAudio = false;
 };
 
 struct RenderArgs
@@ -42,8 +48,8 @@ struct RenderArgs
     int blockSize = 512;
 };
 
-// Adds what only the executable knows (its version, the machine) and writes results.json.
-void writeResults (const std::filesystem::path& outDir, json results)
+// What only the executable knows: its version and the machine.
+void addEnvironment (json& results)
 {
     results["sonolint_version"] = SONOLINT_VERSION;
     results["environment"] = { { "platform", sonolint::currentPlatform() },
@@ -53,14 +59,45 @@ void writeResults (const std::filesystem::path& outDir, json results)
     // On GitHub's runners: which image ran this. A new image can move the numbers a little.
     if (const auto image = juce::SystemStats::getEnvironmentVariable ("ImageVersion", {}); image.isNotEmpty())
         results["environment"]["runner_image"] = (juce::SystemStats::getEnvironmentVariable ("ImageOS", {}) + " " + image).toStdString();
+}
 
-    const auto file = outDir / "results.json";
-    std::filesystem::create_directories (outDir);
-    std::ofstream stream (file, std::ios::binary);
-    stream << results.dump (2) << "\n";
+void writeText (const std::filesystem::path& file, const std::string& text)
+{
+    std::filesystem::create_directories (file.parent_path());
+    std::ofstream stream (file, std::ios::binary);   // binary: LF line endings on Windows too
+    stream << text;
 
     if (! stream)
         throw Error (ErrorCode::config, "could not write " + sonolint::toUtf8 (file));
+}
+
+void writeResults (const std::filesystem::path& outDir, json results)
+{
+    addEnvironment (results);
+    writeText (outDir / "results.json", results.dump (2) + "\n");
+}
+
+// --format: which of md, html, json and junit to write.
+std::vector<std::string> parseFormats (const std::string& text)
+{
+    std::vector<std::string> formats;
+    std::istringstream list (text);
+
+    for (std::string format; std::getline (list, format, ',');)
+    {
+        format.erase (0, format.find_first_not_of (' '));
+        format.erase (format.find_last_not_of (' ') + 1);
+
+        if (format != "md" && format != "html" && format != "json" && format != "junit")
+            throw Error (ErrorCode::config, "--format: unknown format \"" + format + "\"; use md, html, json and junit, separated by commas");
+
+        formats.push_back (format);
+    }
+
+    if (formats.empty())
+        throw Error (ErrorCode::config, "--format: name at least one of md, html, json and junit");
+
+    return formats;
 }
 
 // The scenarios of the config that match --filter, run on the plugin. What `run` and
@@ -88,6 +125,14 @@ json runConfig (const RunArgs& args, const sonolint::Config& config)
     if (args.verbose)
         options.log = [] (const std::string& line) { std::cerr << line << std::endl; };
 
+    if (args.saveAudio)
+        options.onAudio = [&] (const std::string& id, const sonolint::AudioBuffer& input, const sonolint::AudioBuffer& output)
+        {
+            std::filesystem::create_directories (args.out / "audio");
+            sonolint::writeWav (args.out / "audio" / sonolint::fromUtf8 (id + ".input.wav"), input);
+            sonolint::writeWav (args.out / "audio" / sonolint::fromUtf8 (id + ".output.wav"), output);
+        };
+
     // A render that hangs is stuck inside the plugin: all that is left is to save what
     // was measured and end the process.
     options.onTimeout = [&] (const json& partial)
@@ -102,6 +147,7 @@ json runConfig (const RunArgs& args, const sonolint::Config& config)
 
 int run (const RunArgs& args)
 {
+    const auto formats = parseFormats (args.formats);
     const auto config = sonolint::loadConfig (args.config);
     const auto platform = sonolint::currentPlatform();
     const auto baseline = args.noCompare ? json() : sonolint::loadBaseline (args.baseline);   // a broken file stops here, before rendering
@@ -122,8 +168,17 @@ int run (const RunArgs& args)
                       << std::endl;
     }
 
-    writeResults (args.out, results);
-    std::cout << sonolint::formatSummary (results);
+    addEnvironment (results);
+    const sonolint::ReportInfo info { args.artifactUrl, args.commit, args.mergedInto };
+    const auto wants = [&] (const char* format) { return std::find (formats.begin(), formats.end(), format) != formats.end(); };
+
+    if (wants ("json"))   writeText (args.out / "results.json", results.dump (2) + "\n");
+    if (wants ("md"))     writeText (args.out / "report.md", sonolint::formatMarkdown (results, info));
+    if (wants ("html"))   writeText (args.out / "report.html", sonolint::formatHtml (results, info));
+    if (wants ("junit"))  writeText (args.out / "junit.xml", sonolint::formatJunit (results));
+
+    const auto noColour = juce::SystemStats::getEnvironmentVariable ("NO_COLOR", {});
+    std::cout << sonolint::formatSummary (results, noColour.isEmpty() && sonolint::stdoutIsColourTerminal());
 
     const auto policy = args.failOn == "none"         ? sonolint::FailOn::none
                       : args.failOn == "assertions"   ? sonolint::FailOn::assertions
@@ -240,6 +295,12 @@ int main (int argc, char* argv[])
         ->check (CLI::IsMember ({ "regressions", "assertions", "none" }))
         ->capture_default_str();
     runCommand->add_flag ("--no-compare", runArgs.noCompare, "Don't compare with the baseline");
+    runCommand->add_option ("--format", runArgs.formats, "Which files to write, separated by commas: md, html, json, junit")->capture_default_str();
+    runCommand->add_flag ("--save-audio", runArgs.saveAudio, "Also write the input and the output of every scenario to <out>/audio as WAV files");
+    runCommand->add_option ("--artifact-url", runArgs.artifactUrl, "Where the full report can be downloaded, for the footer of report.md")->type_name ("URL");
+    runCommand->add_option ("--commit", runArgs.commit, "The commit that was measured, for the footers of the reports")->type_name ("SHA");
+    runCommand->add_option ("--merged-into", runArgs.mergedInto, "The branch the commit was merged into before measuring, for the footers")
+        ->type_name ("BRANCH");
     runCommand->footer ("Example:\n  sonolint run --plugin build/Heft_artefacts/Release/VST3/Heft.vst3");
 
     RunArgs updateArgs;

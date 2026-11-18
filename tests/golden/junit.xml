@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="Sonolint" tests="20" failures="4" errors="1" skipped="1">
+  <testsuite name="fat50-response" tests="8" failures="2" errors="0" skipped="0">
+    <testcase classname="fat50-response" name="frequency_response.freqs_hz (channel 1)"/>
+    <testcase classname="fat50-response" name="frequency_response.freqs_hz (channel 2)"/>
+    <testcase classname="fat50-response" name="frequency_response.magnitude_db (channel 1)">
+      <failure message="changed: 1 of 3 points moved, the most by -0.4; tolerance 0.1"/>
+    </testcase>
+    <testcase classname="fat50-response" name="frequency_response.magnitude_db (channel 2)">
+      <failure message="changed: 1 of 3 points moved, the most by -0.4; tolerance 0.1"/>
+    </testcase>
+    <testcase classname="fat50-response" name="frequency_response.phase_deg (channel 1)"/>
+    <testcase classname="fat50-response" name="frequency_response.phase_deg (channel 2)"/>
+    <testcase classname="fat50-response" name="frequency_response.gain_1k_db (channel 1)"/>
+    <testcase classname="fat50-response" name="frequency_response.gain_1k_db (channel 2)"/>
+  </testsuite>
+  <testsuite name="transparent-1k" tests="6" failures="1" errors="0" skipped="0">
+    <testcase classname="transparent-1k" name="expect level.gain_db">
+      <failure message="is -0.08, expected 0 within 0.05"/>
+    </testcase>
+    <testcase classname="transparent-1k" name="expect harmonics.thd_db"/>
+    <testcase classname="transparent-1k" name="harmonics.h_dbc (channel 1)"/>
+    <testcase classname="transparent-1k" name="harmonics.thd_db (channel 1)"/>
+    <testcase classname="transparent-1k" name="level.gain_db (channel 1)"/>
+    <testcase classname="transparent-1k" name="level.peak_dbfs (channel 1)"/>
+  </testsuite>
+  <testsuite name="thd-hot" tests="1" failures="1" errors="0" skipped="0">
+    <testcase classname="thd-hot" name="harmonics.thd_db (channel 1)">
+      <failure message="regressed: -40, was -45.5 (+5.5; tolerance 1)"/>
+    </testcase>
+  </testsuite>
+  <testsuite name="clip-4x" tests="1" failures="0" errors="0" skipped="0">
+    <testcase classname="clip-4x" name="aliasing.aliasing_dbc (channel 1)"/>
+  </testsuite>
+  <testsuite name="nan" tests="1" failures="0" errors="1" skipped="0">
+    <testcase classname="nan" name="render">
+      <error message="the output has NaN or infinite samples"/>
+    </testcase>
+  </testsuite>
+  <testsuite name="quiet" tests="1" failures="0" errors="0" skipped="1">
+    <testcase classname="quiet" name="scenario">
+      <skipped message="in the baseline, but no longer in the config"/>
+    </testcase>
+  </testsuite>
+  <testsuite name="robustness" tests="1" failures="0" errors="0" skipped="0">
+    <testcase classname="robustness" name="latency.measured_samples (channel 1)"/>
+  </testsuite>
+  <testsuite name="steady" tests="1" failures="0" errors="0" skipped="0">
+    <testcase classname="steady" name="silence.noise_floor_dbfs (channel 1)"/>
+  </testsuite>
+</testsuites>
