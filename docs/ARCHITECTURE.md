@@ -24,6 +24,7 @@ flowchart LR
 | `sonolint-core` | `src/core/` | Reads `sonolint.yml`, makes the test signals, runs the scenarios, measures, evaluates `expect`, compares with the baseline and builds the results. A static library with no JUCE |
 | `sonolint-host` | `src/host/` | Implements `Renderer` with JUCE: loads the VST3, sets buses, state and parameters, and processes block by block |
 | `sonolint-cli` | `src/cli/` | The `sonolint` executable: arguments, commands, exit codes |
+| GitHub Action | `action.yml`, `scripts/` | Downloads a release, runs `sonolint run`, comments on the pull request ([ACTION.md](ACTION.md)) |
 
 CMake keeps the core honest: it links no JUCE target, and the `core-linux` CI job
 builds it with `-DSONOLINT_CORE_ONLY=ON`, which never downloads JUCE.

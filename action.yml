@@ -1,0 +1,109 @@
+name: Sonolint
+description: Runs your compiled VST3 like a DAW would, measures how it sounds and flags changes in every pull request.
+author: Remaori
+branding:
+  icon: activity
+  color: blue
+
+inputs:
+  plugin:
+    description: Path to the .vst3 to test.
+    required: true
+  config:
+    description: Path to sonolint.yml.
+    default: sonolint.yml
+  baseline:
+    description: Path to the baseline file.
+    default: sonolint/baseline.json
+  version:
+    description: >-
+      The Sonolint release to download, such as v0.1.0. By default, the one the Action
+      is pinned to; with a major tag such as @v0, the newest release of that major version.
+    default: ''
+  fail-on:
+    description: 'What makes the job fail: regressions, assertions or none.'
+    default: regressions
+  comment:
+    description: Comment the report on the pull request, editing the earlier comment.
+    default: 'true'
+  mode:
+    description: >-
+      run compares with the baseline. baseline writes a new baseline for this runner's
+      platform and puts it in the artifact, to download and commit.
+    default: run
+  binary:
+    description: >-
+      Advanced: a sonolint executable to use instead of downloading a release. Nothing
+      is downloaded and no checksum is verified. Meant for testing Sonolint itself.
+    default: ''
+  github-token:
+    description: Token to download the release and to comment.
+    default: ${{ github.token }}
+
+outputs:
+  status:
+    description: pass or fail.
+    value: ${{ steps.run.outputs.status }}
+  regressions:
+    description: How many scenarios regressed or changed.
+    value: ${{ steps.run.outputs.regressions }}
+  report-dir:
+    description: The folder with results.json and the reports.
+    value: ${{ steps.run.outputs.report-dir }}
+
+runs:
+  using: composite
+  steps:
+    - name: Get Sonolint
+      id: get
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        INPUT_BINARY: ${{ inputs.binary }}
+        INPUT_VERSION: ${{ inputs.version }}
+        ACTION_REF: ${{ github.action_ref }}
+        ACTION_REPOSITORY: ${{ github.action_repository }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: '& (Join-Path $env:ACTION_PATH scripts/get-sonolint.ps1)'
+
+    - name: Run Sonolint
+      id: run
+      shell: pwsh
+      env:
+        SONOLINT_EXE: ${{ steps.get.outputs.exe }}
+        INPUT_PLUGIN: ${{ inputs.plugin }}
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_BASELINE: ${{ inputs.baseline }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_MODE: ${{ inputs.mode }}
+        COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        BASE_REF: ${{ github.base_ref }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: '& (Join-Path $env:ACTION_PATH scripts/run-sonolint.ps1)'
+
+    - name: Upload the report
+      if: always() && steps.run.outputs.report-dir != ''
+      uses: actions/upload-artifact@v7
+      with:
+        # The job and the OS in the name keep a matrix of runners from colliding.
+        name: sonolint-${{ inputs.mode == 'baseline' && 'baseline' || 'report' }}-${{ github.job }}-${{ runner.os }}
+        path: ${{ steps.run.outputs.report-dir }}
+        if-no-files-found: warn
+
+    - name: Comment on the pull request
+      if: always() && github.event_name == 'pull_request' && inputs.comment == 'true' && inputs.mode == 'run' && steps.run.outputs.report-dir != ''
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        REPORT: ${{ steps.run.outputs.report-dir }}/report.md
+        REPOSITORY: ${{ github.repository }}
+        PULL_REQUEST: ${{ github.event.pull_request.number }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: '& (Join-Path $env:ACTION_PATH scripts/pr-comment.ps1) -Report $env:REPORT -Repository $env:REPOSITORY -PullRequest $env:PULL_REQUEST'
+
+    - name: Fail if Sonolint failed
+      if: always() && steps.run.outputs.code != ''
+      shell: pwsh
+      env:
+        CODE: ${{ steps.run.outputs.code }}
+      run: exit [int] $env:CODE
