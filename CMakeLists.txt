@@ -114,6 +114,9 @@ target_link_libraries(sonolint-tests
         Catch2::Catch2WithMain
 )
 
+# The expected files that some tests compare their output with, byte for byte.
+target_compile_definitions(sonolint-tests PRIVATE SONOLINT_GOLDEN="${CMAKE_CURRENT_SOURCE_DIR}/tests/golden")
+
 add_test(NAME unit COMMAND sonolint-tests)
 
 # Our own code builds without warnings, and CI keeps it that way.

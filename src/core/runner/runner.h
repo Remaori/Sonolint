@@ -33,9 +33,6 @@ struct RunOptions
 nlohmann::json runScenarios (const std::vector<Scenario>& scenarios, const PluginInfo& plugin, Renderer& renderer,
                              const RunOptions& options = {});
 
-// True when a scenario ended as `error` or `assertion_failed`.
-bool hasFailures (const nlohmann::json& results);
-
 // The test signal of a scenario, the same on every channel. With snapToAnalysisBin
 // a sine moves to the nearest bin of the FFT that will analyse it (unless its `snap`
 // is off).

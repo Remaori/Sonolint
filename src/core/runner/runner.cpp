@@ -11,6 +11,7 @@
 #include "core/analysis/silence.h"
 #include "core/analysis/spectrum.h"
 #include "core/analysis/true_peak.h"
+#include "core/compare/compare.h"
 #include "core/error.h"
 #include "core/io/path_text.h"
 #include "core/signals/generators.h"
@@ -497,15 +498,6 @@ private:
     std::thread thread;   // last: it starts running in the constructor
 };
 
-json summarise (const json& scenarios)
-{
-    json summary { { "pass", 0 }, { "assertion_failed", 0 }, { "error", 0 } };
-
-    for (const auto& scenario : scenarios)
-        summary[scenario.at ("status").get<std::string>()] = summary[scenario.at ("status").get<std::string>()].get<int>() + 1;
-
-    return summary;
-}
 } // namespace
 
 //==============================================================================
@@ -641,11 +633,5 @@ json runScenarios (const std::vector<Scenario>& scenarios, const PluginInfo& plu
 
     results["summary"] = summarise (results["scenarios"]);
     return results;
-}
-
-bool hasFailures (const json& results)
-{
-    const auto& summary = results.at ("summary");
-    return summary.at ("error").get<int>() + summary.at ("assertion_failed").get<int>() > 0;
 }
 } // namespace sonolint

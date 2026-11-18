@@ -1,0 +1,2 @@
+# Golden files are compared byte for byte: keep their LF line endings on Windows too.
+tests/golden/** text eol=lf
