@@ -108,8 +108,14 @@ TEST_CASE ("runner: a failed expectation fails the scenario and says what was me
     CHECK_THAT (assertionOn (scenario, "level.gain_db")["actual"].get<double>(), WithinAbs (-6.0206, 1.0e-3));
     CHECK (sonolint::fails (results, sonolint::FailOn::regressions));
 
-    CHECK (sonolint::formatSummary (results) == "FAIL      gain: level.gain_db is -6.0206, expected 0 within 0.05\n"
+    CHECK (sonolint::formatSummary (results) == "SCENARIO  STATUS            WHAT\n"
+                                                "gain      assertion_failed  level.gain_db: is -6.0206, expected 0 within 0.05\n"
                                                 "1 scenarios: 1 assertion_failed\n");
+
+    // With colour, only the status changes: red for a failure.
+    CHECK (sonolint::formatSummary (results, true) == "SCENARIO  STATUS            WHAT\n"
+                                                      "gain      \x1b[31massertion_failed\x1b[0m  level.gain_db: is -6.0206, expected 0 within 0.05\n"
+                                                      "1 scenarios: 1 assertion_failed\n");
 }
 
 TEST_CASE ("runner: a NaN in the output is an error, and the other scenarios still run")
@@ -140,7 +146,8 @@ TEST_CASE ("runner: a NaN in the output is an error, and the other scenarios sti
     CHECK (results["scenarios"][1]["status"] == "pass");
     CHECK (results["summary"]["pass"] == 1);
     CHECK (results["summary"]["error"] == 1);
-    CHECK (sonolint::formatSummary (results) == "ERROR     broken: the output has NaN or infinite samples\n"
+    CHECK (sonolint::formatSummary (results) == "SCENARIO  STATUS  WHAT\n"
+                                                "broken    error   the output has NaN or infinite samples\n"
                                                 "2 scenarios: 1 error, 1 pass\n");
 }
 
@@ -371,5 +378,5 @@ TEST_CASE ("runner: a sine whose harmonics all fold onto other content gets a wa
     CHECK (results["scenarios"][0]["warnings"].size() == 1);
     CHECK (results["scenarios"][0]["status"] == "pass");
     CHECK_FALSE (results["scenarios"][1].contains ("warnings"));
-    CHECK (sonolint::formatSummary (results).rfind ("WARN      bad-frequency: more than half of the folded harmonics", 0) == 0);
+    CHECK (sonolint::formatSummary (results).find ("bad-frequency  pass    warning: more than half of the folded harmonics") != std::string::npos);
 }
