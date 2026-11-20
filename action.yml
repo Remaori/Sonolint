@@ -31,11 +31,11 @@ inputs:
       run compares with the baseline. baseline writes a new baseline for this runner's
       platform and puts it in the artifact, to download and commit.
     default: run
-  artifact-name:
+  id:
     description: >-
-      The name of the artifact with the reports. By default sonolint-report-<OS>, or
-      sonolint-baseline-<OS> in baseline mode. Set it when two jobs of one workflow run
-      use the same mode on the same OS.
+      Tells this run apart from the others in the workflow: it names the artifact
+      (sonolint-report-<id>, or sonolint-baseline-<id>) and the pull request comment. By
+      default the plugin's file name and the platform, such as heft-windows-x64.
     default: ''
   binary:
     description: >-
@@ -82,6 +82,7 @@ runs:
         INPUT_BASELINE: ${{ inputs.baseline }}
         INPUT_FAIL_ON: ${{ inputs.fail-on }}
         INPUT_MODE: ${{ inputs.mode }}
+        INPUT_ID: ${{ inputs.id }}
         COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         BASE_REF: ${{ github.base_ref }}
         ACTION_PATH: ${{ github.action_path }}
@@ -91,8 +92,7 @@ runs:
       if: always() && steps.run.outputs.report-dir != ''
       uses: actions/upload-artifact@v7
       with:
-        # The OS keeps a matrix of runners apart; the mode, the run and the baseline of one job.
-        name: ${{ inputs.artifact-name || format('sonolint-{0}-{1}', inputs.mode == 'baseline' && 'baseline' || 'report', runner.os) }}
+        name: sonolint-${{ inputs.mode == 'baseline' && 'baseline' || 'report' }}-${{ steps.run.outputs.id }}
         path: ${{ steps.run.outputs.report-dir }}
         if-no-files-found: warn
 
@@ -104,8 +104,9 @@ runs:
         REPORT: ${{ steps.run.outputs.report-dir }}/report.md
         REPOSITORY: ${{ github.repository }}
         PULL_REQUEST: ${{ github.event.pull_request.number }}
+        ID: ${{ steps.run.outputs.id }}
         ACTION_PATH: ${{ github.action_path }}
-      run: '& (Join-Path $env:ACTION_PATH scripts/pr-comment.ps1) -Report $env:REPORT -Repository $env:REPOSITORY -PullRequest $env:PULL_REQUEST'
+      run: '& (Join-Path $env:ACTION_PATH scripts/pr-comment.ps1) -Report $env:REPORT -Repository $env:REPOSITORY -PullRequest $env:PULL_REQUEST -Id $env:ID'
 
     - name: Fail if Sonolint failed
       if: always() && steps.run.outputs.code != ''

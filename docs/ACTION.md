@@ -31,6 +31,7 @@ fork with a token that can write to your repository.
 
 To measure on both platforms, use a matrix (`runs-on: ${{ matrix.os }}` with
 `os: [windows-latest, macos-latest]`), as long as your build makes the `.vst3` for both.
+Each job keeps its own comment, and so does each plugin when a repository tests several.
 
 ## Inputs
 
@@ -44,7 +45,7 @@ To measure on both platforms, use a matrix (`runs-on: ${{ matrix.os }}` with
 | `comment` | `true` | Comment the report on the pull request |
 | `mode` | `run` | `run` measures and compares; `baseline` writes a new baseline (below) |
 | `github-token` | `${{ github.token }}` | Downloads the release and posts the comment |
-| `artifact-name` | `sonolint-report-<OS>`, or `sonolint-baseline-<OS>` in baseline mode | The name of the artifact. Set it when two jobs of one workflow run use the same mode on the same OS, since artifact names must be unique within a run |
+| `id` | the plugin's file name and the platform, such as `heft-windows-x64` | Tells this run apart from the others in the workflow: it names the artifact and the comment. Set it when two jobs test the same plugin on the same platform |
 | `binary` | none | Advanced, see below |
 
 ## Outputs
@@ -64,9 +65,9 @@ To measure on both platforms, use a matrix (`runs-on: ${{ matrix.os }}` with
    checks out its merge into the base branch, so the footer says
    `Commit abc1234 (merged into main)`: the commit is the head of the pull request.
 3. Adds `report.md` to the job summary.
-4. Uploads the reports as the artifact `sonolint-report-<OS>`, such as `sonolint-report-Windows`.
+4. Uploads the reports as the artifact `sonolint-report-<id>`, such as `sonolint-report-heft-windows-x64`.
 5. In a pull request, puts `report.md` in a comment, and edits that same comment on the
-   next push instead of adding another. A token that can't comment, as in a pull request
+   next push instead of adding another. Each `id` has its own comment. A token that can't comment, as in a pull request
    from a fork, only gives a warning.
 6. Fails the job with Sonolint's exit code, if it isn't 0.
 
@@ -95,7 +96,7 @@ jobs:
 ```
 
 It starts from the baseline in the repository, rewrites this platform's section and
-uploads the result as `baseline.json` in the artifact `sonolint-baseline-<OS>`.
+uploads the result as `baseline.json` in the artifact `sonolint-baseline-<id>`.
 Download it, check the diff and commit it. Run it again whenever a change of sound is
 intended. Nothing is compared and nothing is commented in this mode.
 

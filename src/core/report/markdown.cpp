@@ -156,7 +156,10 @@ std::string formatMarkdown (const json& results, const ReportInfo& info)
     const auto& plugin = results.at ("plugin");
     const auto& scenarios = results.at ("scenarios");
 
-    auto head = "<!-- sonolint:report -->\n## Sonolint · " + cell (plugin.at ("name").get<std::string>() + " " + plugin.at ("version").get<std::string>())
+    // The platform too: a matrix of runners puts one comment per platform on the pull request.
+    const auto platform = results.contains ("environment") ? results["environment"].value ("platform", "") : std::string();
+    auto head = "<!-- sonolint:report -->\n## Sonolint · "
+              + cell (plugin.at ("name").get<std::string>() + " " + plugin.at ("version").get<std::string>() + (platform.empty() ? "" : " · " + platform))
               + "\n\n" + statusLine (results.at ("summary")) + "\n\n";
 
     // Every problem of every scenario, the worst first.

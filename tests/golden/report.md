@@ -1,5 +1,5 @@
 <!-- sonolint:report -->
-## Sonolint · Example 1.2.3
+## Sonolint · Example 1.2.3 · macos-arm64
 
 **1 error · 1 regressed · 1 changed · 1 assertion_failed · 1 removed · 1 improved · 1 new · 1 pass**
 

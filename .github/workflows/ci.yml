@@ -112,8 +112,8 @@ jobs:
         run: ctest --test-dir build --output-on-failure
 
   # The Action of this pull request, run with the binary just built instead of a
-  # release. On macOS it comments on the pull request; push twice to see it edit
-  # the comment instead of adding another.
+  # release. Both jobs comment on the pull request, each its own comment, which later
+  # pushes edit (self-test-comments checks it).
   self-test:
     name: Action self-test (${{ matrix.os }})
     needs: [windows, macos]
@@ -131,7 +131,7 @@ jobs:
           - os: windows-latest
             artifact: self-test-Windows
             exe: sonolint.exe
-            comment: 'false'
+            comment: 'true'
           - os: macos-latest
             artifact: self-test-macOS
             exe: sonolint
@@ -216,7 +216,7 @@ jobs:
       - name: Restore the executable bits, which artifacts drop
         run: chmod -R u+x self-test
 
-      # Its own artifact name: the macOS self-test above uploads sonolint-report-macOS.
+      # Its own id: the macOS self-test above tests the same plugin on the same platform.
       - name: Run the Action
         uses: ./
         with:
@@ -224,4 +224,29 @@ jobs:
           plugin: self-test/tests/fixtures/SonolintFixture_artefacts/Release/VST3/SonolintFixture.vst3
           config: tests/integration/gain.yml
           baseline: tests/integration/no-baseline-here.json
-          artifact-name: sonolint-report-read-only
+          id: read-only
+
+  # A matrix must not clobber its own comments: one per job of self-test, and none twice.
+  self-test-comments:
+    name: Action self-test, one comment per job
+    needs: self-test
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+
+    steps:
+      - name: Count the comments of each job
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PULL_REQUEST: ${{ github.event.pull_request.number }}
+        run: |
+          $pages = (gh api --paginate --slurp "repos/$env:REPOSITORY/issues/$env:PULL_REQUEST/comments") -join "`n" | ConvertFrom-Json
+          $comments = $pages | ForEach-Object { $_ }
+          foreach ($id in 'sonolintfixture-windows-x64', 'sonolintfixture-macos-arm64') {
+              $count = @($comments | Where-Object { $_.body -and $_.body.StartsWith("<!-- sonolint:report $id -->") }).Count
+              if ($count -ne 1) { throw "expected one comment for $id, found $count" }
+          }
