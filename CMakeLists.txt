@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 3.25)   # workflow presets, and SYSTEM in FetchContent_Declare
 
-# 0.0.x while the first version is in development; 0.1.0 is the first release.
-project(Sonolint VERSION 0.0.1 LANGUAGES C CXX)
+project(Sonolint VERSION 0.1.0 LANGUAGES C CXX)
 
 # ON builds only sonolint-core and its unit tests, and never downloads JUCE. The
 # core-linux CI job uses it: a JUCE header included from src/core/ fails there.

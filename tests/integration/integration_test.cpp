@@ -309,8 +309,13 @@ TEST_CASE ("Reports: --format chooses the files, --save-audio writes the WAVs, a
 {
     const auto folder = std::filesystem::path (SONOLINT_OUT) / "reports";
 
-    // By default, the four reports.
-    run ("gain", "--no-compare", "reports-default");
+    // By default, the four reports; --environment adds to what results.json says about the machine.
+    const auto withDefaults = run ("gain", "--no-compare --environment runner_image_os=macos26 --environment runner_image_version=20261115.1",
+                                   "reports-default");
+    CHECK (withDefaults.results["environment"]["runner_image_os"] == "macos26");
+    CHECK (withDefaults.results["environment"]["runner_image_version"] == "20261115.1");
+    CHECK (withDefaults.results["environment"].contains ("platform"));
+
     for (const auto* file : { "results.json", "report.md", "report.html", "junit.xml" })
     {
         CAPTURE (file);
@@ -341,4 +346,6 @@ TEST_CASE ("Reports: --format chooses the files, --save-audio writes the WAVs, a
     CHECK (output.channels.size() == 2);
 
     CHECK (runSonolint ("run --config " + configFile ("gain") + " --plugin " + quoted (fixture()) + " --format pdf --out " + quoted (folder)) == 2);
+    CHECK (runSonolint ("run --config " + configFile ("gain") + " --plugin " + quoted (fixture()) + " --environment nokey --out " + quoted (folder)) == 2);
+    CHECK (runSonolint ("run --config " + configFile ("gain") + " --plugin " + quoted (fixture()) + " --environment os=other --out " + quoted (folder)) == 2);
 }

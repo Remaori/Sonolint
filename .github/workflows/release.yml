@@ -1,0 +1,160 @@
+# Pushing a version tag (v0.1.0, or v0.1.0-rc.1 for a pre-release) builds Sonolint on
+# Windows and macOS and creates a *draft* GitHub Release with one zip per platform and
+# their SHA256SUMS. Nobody sees a draft until it is published by hand (docs/RELEASING.md).
+# The tag pattern leaves out major tags such as v0, which major-tag.yml moves.
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: read
+
+jobs:
+  notes:
+    name: Check the version and take the notes
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check that the tag matches VERSION in CMakeLists.txt
+        run: |
+          version=$(sed -n 's/^project(Sonolint VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          base="${GITHUB_REF_NAME%%-*}"   # v0.1.0-rc.1 -> v0.1.0
+          if [ "v$version" != "$base" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match VERSION $version in CMakeLists.txt"
+            exit 1
+          fi
+
+      # The notes are the CHANGELOG.md section of the version without its pre-release
+      # part ("## 0.1.0", a date or note after a space is fine). No section, no release.
+      - name: Take the release notes from CHANGELOG.md
+        run: |
+          base="${GITHUB_REF_NAME%%-*}"
+          awk -v heading="## ${base#v}" '
+            $0 == heading || index($0, heading " ") == 1 { found = 1; next }
+            found && /^## / { exit }
+            found && NF == 0 && ! started { next }
+            found { started = 1; lines[++n] = $0 }
+            END {
+              while (n > 0 && lines[n] ~ /^[[:space:]]*$/) n--
+              for (i = 1; i <= n; i++) print lines[i]
+            }
+          ' CHANGELOG.md > changes.md
+
+          if ! grep -q '[^[:space:]]' changes.md; then
+            echo "::error::Add a '## ${base#v}' section to CHANGELOG.md"
+            exit 1
+          fi
+
+          cat > notes.md <<EOF
+          ## What's new
+
+          $(cat changes.md)
+
+          ## Use it
+
+          In a GitHub workflow, on a Windows x64 or macOS runner:
+
+          \`\`\`yaml
+          - uses: Remaori/Sonolint@$GITHUB_REF_NAME
+            with:
+              plugin: path/to/YourPlugin.vst3
+          \`\`\`
+
+          Or download the zip for your system, unzip it and run \`sonolint --help\`. On macOS, a zip
+          downloaded with a browser is quarantined: run \`xattr -d com.apple.quarantine sonolint\` once.
+          The binaries are not code-signed. Sonolint is licensed under the GNU AGPL v3; third-party
+          licences are in THIRD_PARTY_NOTICES.txt inside each zip.
+          EOF
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: notes
+          path: notes.md
+
+  build:
+    name: Build (${{ matrix.platform }})
+    needs: notes
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            preset: windows
+            platform: windows-x64
+            exe: sonolint.exe
+          - os: macos-latest
+            preset: macos
+            platform: macos-universal
+            exe: sonolint
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache the downloaded dependencies
+        uses: actions/cache@v6
+        with:
+          path: build/_deps
+          key: deps-${{ runner.os }}-${{ hashFiles('CMakeLists.txt') }}
+
+      - name: Configure, build and test
+        run: cmake --workflow --preset ${{ matrix.preset }}
+
+      - name: Package
+        shell: bash
+        run: |
+          name="sonolint-$GITHUB_REF_NAME-${{ matrix.platform }}"
+          mkdir -p package dist
+          cp "build/sonolint-cli_artefacts/Release/${{ matrix.exe }}" LICENSE THIRD_PARTY_NOTICES.txt package/
+
+          # zip keeps the executable bit on macOS; on Windows, PowerShell makes the zip.
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            pwsh -Command "Compress-Archive -Path package/* -DestinationPath dist/$name.zip"
+          else
+            (cd package && zip -X "../dist/$name.zip" *)
+          fi
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-${{ matrix.platform }}
+          path: dist/*.zip
+          if-no-files-found: error
+
+  release:
+    name: Draft release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: notes
+
+      - name: Create a draft GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          (cd dist && sha256sum *.zip > SHA256SUMS)
+
+          # A tag with a pre-release part (v0.1.0-rc.1) becomes a pre-release.
+          prerelease=""
+          case "$GITHUB_REF_NAME" in *-*) prerelease="--prerelease" ;; esac
+
+          # --draft: published by hand after checking it.
+          gh release create "$GITHUB_REF_NAME" dist/*.zip dist/SHA256SUMS --draft $prerelease --verify-tag \
+            --title "Sonolint $GITHUB_REF_NAME" --notes-file notes.md
