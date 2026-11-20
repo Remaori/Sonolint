@@ -16,7 +16,8 @@ std::string padded (const std::string& text, size_t width) { return text + std::
 std::string painted (const std::string& text, const std::string& status)
 {
     const auto* code = status == "improved"                                        ? "\x1b[32m"    // green
-                     : status == "removed" || status == "pass" || status == "new"  ? "\x1b[33m"    // yellow: only a warning brings these here
+                     : status == "changed" || status == "removed"                  ? "\x1b[33m"    // yellow
+                     : status == "pass" || status == "new"                         ? "\x1b[33m"    // yellow: only a warning brings these here
                                                                                    : "\x1b[31m";   // red
     return code + text + "\x1b[0m";
 }
@@ -34,7 +35,7 @@ std::string formatSummary (const json& results, bool colour)
 
     for (const auto& scenario : results.at ("scenarios"))
     {
-        Row row { scenario.at ("id").get<std::string>(), scenario.at ("status").get<std::string>(), {} };
+        Row row { scenario.at ("id").get<std::string>(), scenario.at ("status").get<std::string>(), {} };   // status as in results.json
 
         for (const auto& warning : scenario.value ("warnings", json::array()))
             row.lines.push_back ("warning: " + warning.get<std::string>());
@@ -55,7 +56,7 @@ std::string formatSummary (const json& results, bool colour)
         for (const auto& row : rows)
         {
             idWidth = std::max (idWidth, row.id.size());
-            statusWidth = std::max (statusWidth, row.status.size());
+            statusWidth = std::max (statusWidth, statusLabel (row.status).size());
         }
 
         text += padded ("SCENARIO", idWidth) + "  " + padded ("STATUS", statusWidth) + "  WHAT\n";
@@ -64,7 +65,7 @@ std::string formatSummary (const json& results, bool colour)
         {
             for (size_t i = 0; i < row.lines.size(); ++i)
             {
-                const auto status = padded (i == 0 ? row.status : "", statusWidth);
+                const auto status = padded (i == 0 ? statusLabel (row.status) : "", statusWidth);
                 text += padded (i == 0 ? row.id : "", idWidth) + "  " + (colour && i == 0 ? painted (status, row.status) : status) + "  "
                       + row.lines[i] + "\n";
             }
@@ -77,7 +78,7 @@ std::string formatSummary (const json& results, bool colour)
 
     for (const auto& status : statusesWorstFirst())
         if (const auto count = summary.value (status, 0); count > 0)
-            totals += (totals.empty() ? "" : ", ") + std::to_string (count) + " " + status;
+            totals += (totals.empty() ? "" : ", ") + std::to_string (count) + " " + statusLabel (status);
 
     text += std::to_string (results.at ("scenarios").size()) + " scenarios: " + totals + "\n";
 

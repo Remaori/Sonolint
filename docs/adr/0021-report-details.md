@@ -17,14 +17,28 @@ Decisions taken while writing the terminal table, `report.md`, `report.html` and
   tolerance of 0, or a yes/no that flipped, counts as infinitely far), so the row to
   read first is on top. The terminal keeps one block per scenario, in the same order
   inside it.
+- **Matrix variants that moved alike share a row too:** `robustness (bs=64, 512)`, with
+  the same test as channels. The terminal keeps one block per variant.
+- **A failed rule joins the row of its value:** `0.9 dBTP (was 0.0, +0.9; tolerance
+  ±0.1) · breaks rule ≤ 0.5`, one fact per row. The row keeps the worse status in the
+  order of the specification (here `changed`), so it agrees with the status of the
+  scenario. A rule whose value has no row, or more than one, stands alone.
+- **`assertion_failed` reads `rule failed`** in every report; `results.json` keeps the
+  name of the specification. Rules are written with symbols: `≤ 0.5`, `0 ± 0.05`.
+- **Red for errors, regressions and failed rules; amber for changes and anything
+  removed.** A change is a difference to look at, not yet a fault. The word is always
+  there, so the colour is never the only signal.
 - **Channels that moved alike share a row,** marked `(both channels)` or `(all N
-  channels)`. They are alike when their rows would read the same, so nothing shown is
+  channels)`; a field with one value for the whole plugin, like the latency it reports,
+  names no channel. They are alike when their rows would read the same, so nothing shown is
   lost; a channel that passed, or one that moved differently, keeps its own row.
-- **The rows are for people:** `-51.5 dBc (was -79.8, +28.3; tolerance ±2)`. One
-  decimal, or as many as the tolerance has, and more while the rounded change would
-  look as if it were within the tolerance (`+0.104` over `0.1`, never `+0.1`); a
-  failed rule gets more decimals while the rounded value would meet it. Whole values
-  stay whole. `results.json` keeps every digit. The minus sign is ASCII, and the
+- **The rows are for people:** `-51.5 dBc (was -79.8, +28.3; tolerance ±2)`. Every
+  number of a row has one decimal, or as many as the tolerance has when it has more,
+  and the change is the difference of the values as written, so the row adds up
+  (`-9.4 (was -9.9, +0.5)`, not `+0.45` next to one-decimal values). A row gets more
+  decimals only when fewer would read as within its tolerance (`+0.104` over `0.1`,
+  never `+0.1`) or as meeting its rule (`0.54` against `≤ 0.5`, never `0.5`). Whole
+  values stay whole. `results.json` keeps every digit. The minus sign is ASCII, and the
   Windows console is switched to UTF-8 so `±` and plugin names show.
 - **`report.md` uses the four columns of the HTML report** (scenario, metric, what
   happened, status): with seven, a comment on GitHub, about 800 pixels wide, cut the

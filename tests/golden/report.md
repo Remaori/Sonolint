@@ -1,14 +1,14 @@
 <!-- sonolint:report -->
 ## Sonolint · Example 1.2.3 · macos-arm64
 
-**1 error · 1 regressed · 1 changed · 1 assertion_failed · 1 removed · 1 improved · 1 new · 1 pass**
+**1 error · 1 regressed · 1 changed · 1 rule failed · 1 removed · 1 improved · 1 new · 1 pass**
 
 | Scenario | Metric | What happened | Status |
 | --- | --- | --- | --- |
 | nan |  | the output has NaN or infinite samples | error |
 | thd-hot | harmonics.thd_db (channel 1) | -40.0 dB (was -45.5, +5.5; tolerance ±1) | regressed |
 | fat50-response | frequency_response.magnitude_db (both channels) | 1 of 3 points moved, the most by -0.4 dB; tolerance ±0.1 | changed |
-| transparent-1k | level.gain_db | -0.08 dB, expected 0 within 0.05 | assertion_failed |
+| transparent-1k | level.gain_db | -0.08 dB · breaks rule 0 ± 0.05 | rule failed |
 | quiet |  | in the baseline, but no longer in the config | removed |
 | clip-4x | aliasing.aliasing_dbc (channel 1) | -50.0 dBc (was -45.0, -5.0; tolerance ±2 + 2.5 % of the baseline) | improved |
 
@@ -28,7 +28,7 @@ xychart-beta
 | Scenario | Status | Not passing |
 | --- | --- | --- |
 | fat50-response | changed | frequency_response.magnitude_db |
-| transparent-1k | assertion_failed | level.gain_db |
+| transparent-1k | rule failed | level.gain_db |
 | thd-hot | regressed | harmonics.thd_db |
 | clip-4x | improved | aliasing.aliasing_dbc |
 | nan | error | the output has NaN or infinite samples |

@@ -47,8 +47,8 @@ th { color: var(--ink-2); font-weight: 600; }
 td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .status { white-space: nowrap; font-weight: 600; font-size: 14px; }
 .status::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: var(--muted); }
-.st-error::before, .st-regressed::before, .st-changed::before, .st-assertion_failed::before, .st-fail::before { background: var(--critical); }
-.st-removed::before, .st-warning::before { background: var(--warning); }
+.st-error::before, .st-regressed::before, .st-assertion_failed::before, .st-fail::before { background: var(--critical); }
+.st-changed::before, .st-removed::before, .st-warning::before { background: var(--warning); }
 .st-improved::before { background: var(--good); }
 .st-info::before { background: var(--muted); }
 dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 16px; margin: 12px 0 0; font-size: 14px; }
@@ -114,7 +114,7 @@ std::string anchor (const std::string& id)
     return out;
 }
 
-std::string statusBadge (const std::string& status) { return "<span class=\"status st-" + status + "\">" + escaped (status) + "</span>"; }
+std::string statusBadge (const std::string& status) { return "<span class=\"status st-" + status + "\">" + escaped (statusLabel (status)) + "</span>"; }
 
 std::string frequencyText (double hz) { return hz < 1000.0 ? showValue (hz) + " Hz" : showValue (hz / 1000.0) + " kHz"; }
 
@@ -561,9 +561,9 @@ std::string formatHtml (const json& results, const ReportInfo& info)
 
     std::string problems;
 
-    for (const auto& [id, problem] : allProblems (results))
-        problems += "<tr><td><a href=\"#" + anchor (id) + "\">" + escaped (id) + "</a></td><td>" + escaped (problem.metric) + "</td><td>" + escaped (problem.text)
-                  + "</td><td>" + statusBadge (problem.status) + "</td></tr>\n";
+    for (const auto& row : allProblems (results))
+        problems += "<tr><td><a href=\"#" + anchor (row.link) + "\">" + escaped (row.scenarios) + "</a></td><td>" + escaped (row.problem.metric) + "</td><td>"
+                  + escaped (row.problem.text) + "</td><td>" + statusBadge (row.problem.status) + "</td></tr>\n";
 
     std::string index;
 
