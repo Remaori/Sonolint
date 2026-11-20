@@ -1,6 +1,17 @@
 # Runs sonolint for the Action and writes the step outputs: code (its exit code, so the
-# Action can upload and comment before failing), status, regressions and report-dir.
+# Action can upload and comment before failing), status, regressions, report-dir and id.
 $ErrorActionPreference = 'Stop'
+
+# Tells this run's artifact and comment apart from the other jobs of the workflow: by
+# default the plugin's file name and the platform, so a matrix or two plugins don't collide.
+$id = $env:INPUT_ID
+if (-not $id) {
+    $platform = if ($IsWindows) { 'windows-x64' } elseif ($env:RUNNER_ARCH -eq 'ARM64') { 'macos-arm64' } else { 'macos-x64' }
+    $id = [IO.Path]::GetFileNameWithoutExtension($env:INPUT_PLUGIN.TrimEnd('/', '\')) + "-$platform"
+}
+$id = ($id.ToLowerInvariant() -replace '[^a-z0-9]+', '-').Trim('-')
+if (-not $id) { throw "the id needs letters or digits" }
+Add-Content $env:GITHUB_OUTPUT "id=$id"
 
 $out = Join-Path $env:GITHUB_WORKSPACE 'sonolint-out'
 if (Test-Path $out) { Remove-Item -Recurse -Force $out }

@@ -22,15 +22,19 @@ Decisions taken while writing `action.yml`, its scripts and the release workflow
 - **The Action always asks for `json` in `--format`:** its outputs come from
   `results.json`.
 - **`regressions` counts scenarios that regressed or changed:** both fail the job.
-- **The artifact is `sonolint-report-<OS>`, or `sonolint-baseline-<OS>` in baseline
-  mode.** Artifact names are unique within a workflow run: the OS keeps a matrix of
-  runners apart, and the mode the run and the baseline of one job. Two jobs with the
-  same mode on the same OS would still collide, so `artifact-name` can name it instead.
-  Before 0.1.0 the name also carried the job's id, which repeated itself for the usual
-  job names (`sonolint-baseline-sonolint-baseline-Windows`).
+- **An `id` tells each run apart: its artifact and its comment.** By default it is the
+  plugin's file name and the platform (`heft-windows-x64`), so neither a matrix of
+  runners nor two plugins in one repository collide; the artifact is
+  `sonolint-report-<id>` or `sonolint-baseline-<id>`, since artifact names are unique
+  within a workflow run, and the comment's marker carries it. The id comes from the
+  plugin's path and the runner, before anything runs, so it exists even when Sonolint
+  fails. Before 0.1.0 the artifact was named after the job and the OS, which repeated
+  itself (`sonolint-baseline-sonolint-baseline-Windows`), and every job of a matrix
+  edited the same comment, so the last one hid the others.
 - **Any failure to comment is a warning,** not only a 403: the report is still in the
   job summary and the artifact, and the job's result is Sonolint's.
-- **The comment to edit is found by the marker at the start of its body,** whoever wrote
+- **The comment to edit is found by the marker at the start of its body**
+  (`<!-- sonolint:report <id> -->`, the binary's marker with the id added), whoever wrote
   it, so a token of a person works as well as the default one.
 - **A pull request from a fork is tested with a read-only token** in a second self-test
   job: a fork gets exactly that, and no second account is needed.
