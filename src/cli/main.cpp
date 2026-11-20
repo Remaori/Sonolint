@@ -306,6 +306,7 @@ int main (int argc, char* argv[])
 {
     CLI::App app { "Sonolint runs your compiled VST3 like a DAW would, measures how it sounds and flags changes." };
     argv = app.ensure_utf8 (argv);   // Windows passes the arguments in the ANSI code page
+    sonolint::useUtf8Console();
     app.require_subcommand (1);
 
     RunArgs runArgs;

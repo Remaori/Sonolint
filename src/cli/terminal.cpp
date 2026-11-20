@@ -26,4 +26,11 @@ bool stdoutIsColourTerminal()
     return isatty (fileno (stdout)) != 0;
    #endif
 }
+
+void useUtf8Console()
+{
+   #ifdef _WIN32
+    SetConsoleOutputCP (CP_UTF8);
+   #endif
+}
 } // namespace sonolint

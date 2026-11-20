@@ -244,14 +244,15 @@ sonolint run [--config sonolint.yml] [--plugin PATH] [--baseline sonolint/baseli
 repeated. Scenarios of the baseline outside the filter are left out of the comparison.
 
 The terminal shows a table of the scenarios that didn't pass, one line per problem,
-and the totals. Statuses are coloured when the output is a terminal and `NO_COLOR`
-isn't set.
+and the totals. Within a scenario the worst comes first, and channels that moved alike
+share a line. Statuses are coloured when the output is a terminal and `NO_COLOR` isn't
+set.
 
 ```text
 SCENARIO    STATUS            WHAT
-fat50-1k    changed           level.gain_db (channel 2): -0.8, was 0 (-0.8; tolerance 0.05)
-robustness  assertion_failed  latency.mismatch_samples: is -10, expected from -1 to 1
-3 scenarios: 1 changed, 1 assertion_failed, 1 pass
+fat100-hf   regressed         aliasing.aliasing_dbc (both channels): -51.5 dBc (was -79.8, +28.3; tolerance ±2)
+robustness  assertion_failed  latency.mismatch_samples: -10.2 samples, expected from -1 to 1
+3 scenarios: 1 regressed, 1 assertion_failed, 1 pass
 ```
 
 Without a baseline file, or without values for this platform in it, every value is

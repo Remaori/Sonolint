@@ -39,39 +39,6 @@ std::string statusLine (const json& summary)
     return "**" + line + "**";
 }
 
-// One row of the table of what didn't pass:
-// scenario | metric | baseline | actual | Δ | tolerance | status
-std::string problemRow (const std::string& id, const Problem& problem)
-{
-    const auto& source = problem.source;
-    std::string baseline, actual, delta, tolerance;
-
-    if (source.contains ("rule"))   // an expect rule
-    {
-        actual = source.at ("actual").is_array() ? "points outside" : showCell (source.at ("actual"));
-        tolerance = "rule: " + showRule (source.at ("rule"));
-    }
-    else if (source.contains ("tolerance"))   // a value compared with the baseline
-    {
-        baseline = showCell (source.value ("baseline", json()));
-        actual = showCell (source.value ("actual", json()));
-
-        if (source.contains ("points_outside"))
-            actual = std::to_string (source["points_outside"].get<int>()) + " of " + actual + " outside";
-
-        if (source.contains ("delta"))
-            delta = showSigned (source["delta"].get<double>()) + (source.contains ("points_outside") ? " (largest)" : "");
-
-        tolerance = showTolerance (source["tolerance"]);
-    }
-    else
-    {
-        actual = problem.text;   // the scenario as a whole: an error, or removed
-    }
-
-    return "| " + id + " | " + cell (problem.metric) + " | " + cell (baseline) + " | " + cell (actual) + " | " + delta + " | " + cell (tolerance)
-         + " | " + problem.status + " |";
-}
 
 std::string frequencyLabel (double hz) { return hz < 1000.0 ? showValue (hz) : showValue (hz / 1000.0) + "k"; }
 
@@ -159,29 +126,15 @@ std::string formatMarkdown (const json& results, const ReportInfo& info)
     auto head = "<!-- sonolint:report -->\n## Sonolint · " + cell (plugin.at ("name").get<std::string>() + " " + plugin.at ("version").get<std::string>())
               + "\n\n" + statusLine (results.at ("summary")) + "\n\n";
 
-    // Every problem of every scenario, the worst first.
-    std::vector<std::pair<std::string, Problem>> problems;
-
-    for (const auto& scenario : scenarios)
-        for (auto& problem : problemsOf (scenario))
-            problems.emplace_back (scenario.at ("id").get<std::string>(), std::move (problem));
-
-    const auto rank = [] (const std::string& status)
-    {
-        const auto& order = statusesWorstFirst();
-        return std::find (order.begin(), order.end(), status) - order.begin();
-    };
-
-    std::stable_sort (problems.begin(), problems.end(), [&] (const auto& a, const auto& b) { return rank (a.second.status) < rank (b.second.status); });
-
+    // Four columns, like the HTML report: more would overflow the width of a comment on GitHub.
     std::string table;
 
-    for (const auto& [id, problem] : problems)
-        table += problemRow (id, problem) + "\n";
+    for (const auto& [id, problem] : allProblems (results))
+        table += "| " + id + " | " + cell (problem.metric) + " | " + cell (problem.text) + " | " + problem.status + " |\n";
 
     head += table.empty() ? "No regressions, changes, failed rules or errors.\n"
-                          : "| Scenario | Metric | Baseline | Actual | Δ | Tolerance | Status |\n"
-                            "| --- | --- | --- | --- | --- | --- | --- |\n" + table;
+                          : "| Scenario | Metric | What happened | Status |\n"
+                            "| --- | --- | --- | --- |\n" + table;
 
     std::vector<std::string> charts;
 

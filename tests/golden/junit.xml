@@ -4,10 +4,10 @@
     <testcase classname="fat50-response" name="frequency_response.freqs_hz (channel 1)"/>
     <testcase classname="fat50-response" name="frequency_response.freqs_hz (channel 2)"/>
     <testcase classname="fat50-response" name="frequency_response.magnitude_db (channel 1)">
-      <failure message="changed: 1 of 3 points moved, the most by -0.4; tolerance 0.1"/>
+      <failure message="changed: 1 of 3 points moved, the most by -0.4 dB; tolerance ±0.1"/>
     </testcase>
     <testcase classname="fat50-response" name="frequency_response.magnitude_db (channel 2)">
-      <failure message="changed: 1 of 3 points moved, the most by -0.4; tolerance 0.1"/>
+      <failure message="changed: 1 of 3 points moved, the most by -0.4 dB; tolerance ±0.1"/>
     </testcase>
     <testcase classname="fat50-response" name="frequency_response.phase_deg (channel 1)"/>
     <testcase classname="fat50-response" name="frequency_response.phase_deg (channel 2)"/>
@@ -26,7 +26,7 @@
   </testsuite>
   <testsuite name="thd-hot" tests="1" failures="1" errors="0" skipped="0">
     <testcase classname="thd-hot" name="harmonics.thd_db (channel 1)">
-      <failure message="regressed: -40, was -45.5 (+5.5; tolerance 1)"/>
+      <failure message="regressed: -40.0 dB (was -45.5, +5.5; tolerance ±1)"/>
     </testcase>
   </testsuite>
   <testsuite name="clip-4x" tests="1" failures="0" errors="0" skipped="0">
