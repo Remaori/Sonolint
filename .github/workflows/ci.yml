@@ -216,6 +216,7 @@ jobs:
       - name: Restore the executable bits, which artifacts drop
         run: chmod -R u+x self-test
 
+      # Its own artifact name: the macOS self-test above uploads sonolint-report-macOS.
       - name: Run the Action
         uses: ./
         with:
@@ -223,3 +224,4 @@ jobs:
           plugin: self-test/tests/fixtures/SonolintFixture_artefacts/Release/VST3/SonolintFixture.vst3
           config: tests/integration/gain.yml
           baseline: tests/integration/no-baseline-here.json
+          artifact-name: sonolint-report-read-only

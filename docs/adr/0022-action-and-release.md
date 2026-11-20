@@ -22,9 +22,12 @@ Decisions taken while writing `action.yml`, its scripts and the release workflow
 - **The Action always asks for `json` in `--format`:** its outputs come from
   `results.json`.
 - **`regressions` counts scenarios that regressed or changed:** both fail the job.
-- **The artifact name carries the job and the OS** (`sonolint-report-<job>-<OS>`), not
-  just `sonolint-report`: a matrix of runners, or the run and the baseline mode in one
-  job, would otherwise collide, since artifact names are unique within a workflow run.
+- **The artifact is `sonolint-report-<OS>`, or `sonolint-baseline-<OS>` in baseline
+  mode.** Artifact names are unique within a workflow run: the OS keeps a matrix of
+  runners apart, and the mode the run and the baseline of one job. Two jobs with the
+  same mode on the same OS would still collide, so `artifact-name` can name it instead.
+  Before 0.1.0 the name also carried the job's id, which repeated itself for the usual
+  job names (`sonolint-baseline-sonolint-baseline-Windows`).
 - **Any failure to comment is a warning,** not only a 403: the report is still in the
   job summary and the artifact, and the job's result is Sonolint's.
 - **The comment to edit is found by the marker at the start of its body,** whoever wrote
