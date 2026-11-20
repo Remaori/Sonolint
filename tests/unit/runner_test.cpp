@@ -109,12 +109,12 @@ TEST_CASE ("runner: a failed expectation fails the scenario and says what was me
     CHECK (sonolint::fails (results, sonolint::FailOn::regressions));
 
     CHECK (sonolint::formatSummary (results) == "SCENARIO  STATUS            WHAT\n"
-                                                "gain      assertion_failed  level.gain_db: is -6.0206, expected 0 within 0.05\n"
+                                                "gain      assertion_failed  level.gain_db: -6.02 dB, expected 0 within 0.05\n"
                                                 "1 scenarios: 1 assertion_failed\n");
 
     // With colour, only the status changes: red for a failure.
     CHECK (sonolint::formatSummary (results, true) == "SCENARIO  STATUS            WHAT\n"
-                                                      "gain      \x1b[31massertion_failed\x1b[0m  level.gain_db: is -6.0206, expected 0 within 0.05\n"
+                                                      "gain      \x1b[31massertion_failed\x1b[0m  level.gain_db: -6.02 dB, expected 0 within 0.05\n"
                                                       "1 scenarios: 1 assertion_failed\n");
 }
 

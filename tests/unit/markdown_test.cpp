@@ -69,7 +69,7 @@ TEST_CASE ("report.md: past the limit, the <details> block goes first and the ta
     // Every row of the table of what didn't pass is still there.
     for (int i = 0; i < 150; ++i)
         CHECK (text.find ("| a-scenario-with-a-rather-long-name-to-fill-the-report-" + std::to_string (i)
-                          + " | frequency_response.magnitude_db (channel 1) |")
+                          + " | frequency_response.magnitude_db (both channels) |")
                != std::string::npos);
 
     CHECK (text.find ("[Full report]") != std::string::npos);   // and the footer
@@ -81,7 +81,7 @@ TEST_CASE ("report.md: cells can't break the table")
     results["scenarios"] = json::array ({ { { "id", "x" }, { "status", "error" }, { "error", "a | b\nc <d>" } } });
     results["summary"] = sonolint::summarise (results["scenarios"]);
 
-    CHECK (sonolint::formatMarkdown (results, {}).find ("| x |  |  | a \\| b c &lt;d> |  |  | error |") != std::string::npos);
+    CHECK (sonolint::formatMarkdown (results, {}).find ("| x |  | a \\| b c &lt;d> | error |") != std::string::npos);
 }
 
 TEST_CASE ("report.md: a chart of many points shows about 10 of them, always with the one that moved the most")

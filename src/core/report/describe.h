@@ -26,21 +26,29 @@ std::string showRule (const nlohmann::json& rule);
 // A tolerance of the comparison: "0.05", or "0.05 + 2 % of the baseline".
 std::string showTolerance (const nlohmann::json& tolerance);
 
-// How a compared value that didn't pass moved: "0.2, was 0 (+0.2; tolerance 0.05)",
-// "1 of 31 points moved, the most by -0.4; tolerance 0.1", "false, was true".
+// How a compared value that didn't pass moved, for people: "-51.5 dBc (was -79.8, +28.3;
+// tolerance ±2)", "1 of 31 points moved, the most by -0.4 dB; tolerance ±0.1",
+// "false (was true)". One decimal, or as many as the tolerance has, and more while the
+// change would read as if it were within the tolerance.
 std::string showMovement (const nlohmann::json& entry);
 
 // Something in a scenario that didn't pass, or that improved.
 struct Problem
 {
     std::string status;     // error, regressed, changed, assertion_failed, removed or improved
-    std::string metric;     // "level.gain_db (channel 2)", or empty when it is the whole scenario
+    std::string metric;     // "level.gain_db (channel 2)", "... (both channels)", or empty for the whole scenario
     std::string text;       // what happened, in words
-    nlohmann::json source;  // the comparison entry or the assertion it comes from; null for the whole scenario
+    nlohmann::json source;  // the comparison entry (the first channel's, for a shared row) or the assertion; null for the whole scenario
+    double excess = 0.0;    // how many tolerances the change is past; infinite for a yes/no that flipped
 };
 
-// The problems of one scenario of the results, the worst first.
+// The problems of one scenario of the results: the worst status first and, within a
+// status, the farthest past its tolerance. Channels whose rows would read the same
+// share one.
 std::vector<Problem> problemsOf (const nlohmann::json& scenario);
+
+// The problems of every scenario, with its id, in the same order across scenarios.
+std::vector<std::pair<std::string, Problem>> allProblems (const nlohmann::json& results);
 
 // A field drawn as a chart for some channels: those whose values look alike.
 struct ChannelCurve

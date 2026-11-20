@@ -12,6 +12,23 @@ Decisions taken while writing the terminal table, `report.md`, `report.html` and
   of this run and of the baseline, is within the tolerance of the comparison for that
   field, so numerical noise doesn't split one curve into two charts. The chart says
   which channels it stands for.
+- **What didn't pass is one list for every report:** the worst status first and,
+  within a status, the value farthest past its tolerance (|Δ| over the tolerance; a
+  tolerance of 0, or a yes/no that flipped, counts as infinitely far), so the row to
+  read first is on top. The terminal keeps one block per scenario, in the same order
+  inside it.
+- **Channels that moved alike share a row,** marked `(both channels)` or `(all N
+  channels)`. They are alike when their rows would read the same, so nothing shown is
+  lost; a channel that passed, or one that moved differently, keeps its own row.
+- **The rows are for people:** `-51.5 dBc (was -79.8, +28.3; tolerance ±2)`. One
+  decimal, or as many as the tolerance has, and more while the rounded change would
+  look as if it were within the tolerance (`+0.104` over `0.1`, never `+0.1`); a
+  failed rule gets more decimals while the rounded value would meet it. Whole values
+  stay whole. `results.json` keeps every digit. The minus sign is ASCII, and the
+  Windows console is switched to UTF-8 so `±` and plugin names show.
+- **`report.md` uses the four columns of the HTML report** (scenario, metric, what
+  happened, status): with seven, a comment on GitHub, about 800 pixels wide, cut the
+  status off.
 - **The `<details>` block of `report.md` has one row per scenario:** its status and
   what didn't pass. The values are in the HTML report; a row per value would fill the
   60 000 characters with a config of about 20 stereo scenarios.

@@ -561,10 +561,9 @@ std::string formatHtml (const json& results, const ReportInfo& info)
 
     std::string problems;
 
-    for (const auto& scenario : scenarios)
-        for (const auto& problem : problemsOf (scenario))
-            problems += "<tr><td><a href=\"#" + anchor (scenario.at ("id").get<std::string>()) + "\">" + escaped (scenario.at ("id").get<std::string>()) + "</a></td><td>"
-                      + escaped (problem.metric) + "</td><td>" + escaped (problem.text) + "</td><td>" + statusBadge (problem.status) + "</td></tr>\n";
+    for (const auto& [id, problem] : allProblems (results))
+        problems += "<tr><td><a href=\"#" + anchor (id) + "\">" + escaped (id) + "</a></td><td>" + escaped (problem.metric) + "</td><td>" + escaped (problem.text)
+                  + "</td><td>" + statusBadge (problem.status) + "</td></tr>\n";
 
     std::string index;
 
