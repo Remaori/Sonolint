@@ -20,16 +20,21 @@ std::string showSigned (double value);
 // none, or "31 points" for a curve.
 std::string showCell (const nlohmann::json& value);
 
-// An `expect` rule: "0 within 0.05", "at most -100", "from -1 to 1", "true".
+// An `expect` rule: "0 ± 0.05", "≤ -100", "≥ 0", "-1 to 1", "= true".
 std::string showRule (const nlohmann::json& rule);
 
 // A tolerance of the comparison: "0.05", or "0.05 + 2 % of the baseline".
 std::string showTolerance (const nlohmann::json& tolerance);
 
+// A status as the reports show it: "rule failed" for assertion_failed, the others as
+// they are. results.json keeps the names of the specification.
+std::string statusLabel (const std::string& status);
+
 // How a compared value that didn't pass moved, for people: "-51.5 dBc (was -79.8, +28.3;
 // tolerance ±2)", "1 of 31 points moved, the most by -0.4 dB; tolerance ±0.1",
-// "false (was true)". One decimal, or as many as the tolerance has, and more while the
-// change would read as if it were within the tolerance.
+// "false (was true)". One decimal, or the tolerance's own when it has more; the change
+// is the difference of the values as written, and only when that would read as within
+// the tolerance does the row get more decimals.
 std::string showMovement (const nlohmann::json& entry);
 
 // Something in a scenario that didn't pass, or that improved.
@@ -44,11 +49,22 @@ struct Problem
 
 // The problems of one scenario of the results: the worst status first and, within a
 // status, the farthest past its tolerance. Channels whose rows would read the same
-// share one.
+// share one, and a value with one value for the whole plugin names no channel. A
+// failed rule joins the row of its value when there is one: "0.9 dBTP (was 0.0, +0.9;
+// tolerance ±0.1) · breaks rule ≤ 0.5".
 std::vector<Problem> problemsOf (const nlohmann::json& scenario);
 
-// The problems of every scenario, with its id, in the same order across scenarios.
-std::vector<std::pair<std::string, Problem>> allProblems (const nlohmann::json& results);
+// A row of the list of what didn't pass in every scenario.
+struct ListedProblem
+{
+    std::string scenarios;   // "fat100-hf", or the matrix variants that share the row: "robustness (bs=64, 512)"
+    std::string link;        // the id of the first scenario it stands for
+    Problem problem;
+};
+
+// The problems of every scenario in the order of problemsOf, across scenarios. Matrix
+// variants of a scenario whose rows read the same share one.
+std::vector<ListedProblem> allProblems (const nlohmann::json& results);
 
 // A field drawn as a chart for some channels: those whose values look alike.
 struct ChannelCurve

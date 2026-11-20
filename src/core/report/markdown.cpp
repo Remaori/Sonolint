@@ -34,7 +34,7 @@ std::string statusLine (const json& summary)
 
     for (const auto& status : statusesWorstFirst())
         if (const auto count = summary.value (status, 0); count > 0)
-            line += (line.empty() ? "" : " · ") + std::to_string (count) + " " + status;
+            line += (line.empty() ? "" : " · ") + std::to_string (count) + " " + statusLabel (status);
 
     return "**" + line + "**";
 }
@@ -132,8 +132,8 @@ std::string formatMarkdown (const json& results, const ReportInfo& info)
     // Four columns, like the HTML report: more would overflow the width of a comment on GitHub.
     std::string table;
 
-    for (const auto& [id, problem] : allProblems (results))
-        table += "| " + id + " | " + cell (problem.metric) + " | " + cell (problem.text) + " | " + problem.status + " |\n";
+    for (const auto& row : allProblems (results))
+        table += "| " + cell (row.scenarios) + " | " + cell (row.problem.metric) + " | " + cell (row.problem.text) + " | " + statusLabel (row.problem.status) + " |\n";
 
     head += table.empty() ? "No regressions, changes, failed rules or errors.\n"
                           : "| Scenario | Metric | What happened | Status |\n"
@@ -156,7 +156,7 @@ std::string formatMarkdown (const json& results, const ReportInfo& info)
     std::vector<std::string> rows;
 
     for (const auto& scenario : scenarios)
-        rows.push_back ("| " + scenario.at ("id").get<std::string>() + " | " + scenario.at ("status").get<std::string>() + " | " + notPassing (scenario) + " |\n");
+        rows.push_back ("| " + scenario.at ("id").get<std::string>() + " | " + statusLabel (scenario.at ("status").get<std::string>()) + " | " + notPassing (scenario) + " |\n");
 
     std::string footer = "---\n";
 

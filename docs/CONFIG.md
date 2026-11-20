@@ -164,7 +164,8 @@ a field, `group.field`, of a group listed in `metrics`. Each rule is one of:
 | `{ equals: n }` | exactly `n`, which can also be `true` or `false` |
 
 For a field that is a curve, like `frequency_response.magnitude_db`, the rule applies
-to every point. A scenario with a rule that doesn't pass ends as `assertion_failed`.
+to every point. A scenario with a rule that doesn't pass ends as `assertion_failed`,
+which the reports show as `rule failed`.
 
 Three rules apply by themselves when their group is measured. Write your own rule for
 the same field to replace one:
@@ -249,10 +250,10 @@ share a line. Statuses are coloured when the output is a terminal and `NO_COLOR`
 set.
 
 ```text
-SCENARIO    STATUS            WHAT
-fat100-hf   regressed         aliasing.aliasing_dbc (both channels): -51.5 dBc (was -79.8, +28.3; tolerance ±2)
-robustness  assertion_failed  latency.mismatch_samples: -10.2 samples, expected from -1 to 1
-3 scenarios: 1 regressed, 1 assertion_failed, 1 pass
+SCENARIO    STATUS       WHAT
+fat100-hf   regressed    aliasing.aliasing_dbc (both channels): -51.5 dBc (was -79.8, +28.3; tolerance ±2)
+robustness  rule failed  latency.mismatch_samples: -10.2 samples · breaks rule -1 to 1
+3 scenarios: 1 regressed, 1 rule failed, 1 pass
 ```
 
 Without a baseline file, or without values for this platform in it, every value is
