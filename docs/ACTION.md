@@ -44,6 +44,7 @@ To measure on both platforms, use a matrix (`runs-on: ${{ matrix.os }}` with
 | `comment` | `true` | Comment the report on the pull request |
 | `mode` | `run` | `run` measures and compares; `baseline` writes a new baseline (below) |
 | `github-token` | `${{ github.token }}` | Downloads the release and posts the comment |
+| `artifact-name` | `sonolint-report-<OS>`, or `sonolint-baseline-<OS>` in baseline mode | The name of the artifact. Set it when two jobs of one workflow run use the same mode on the same OS, since artifact names must be unique within a run |
 | `binary` | none | Advanced, see below |
 
 ## Outputs
@@ -63,7 +64,7 @@ To measure on both platforms, use a matrix (`runs-on: ${{ matrix.os }}` with
    checks out its merge into the base branch, so the footer says
    `Commit abc1234 (merged into main)`: the commit is the head of the pull request.
 3. Adds `report.md` to the job summary.
-4. Uploads the reports as the artifact `sonolint-report-<job>-<OS>`.
+4. Uploads the reports as the artifact `sonolint-report-<OS>`, such as `sonolint-report-Windows`.
 5. In a pull request, puts `report.md` in a comment, and edits that same comment on the
    next push instead of adding another. A token that can't comment, as in a pull request
    from a fork, only gives a warning.
@@ -94,7 +95,7 @@ jobs:
 ```
 
 It starts from the baseline in the repository, rewrites this platform's section and
-uploads the result as `baseline.json` in the artifact `sonolint-baseline-<job>-<OS>`.
+uploads the result as `baseline.json` in the artifact `sonolint-baseline-<OS>`.
 Download it, check the diff and commit it. Run it again whenever a change of sound is
 intended. Nothing is compared and nothing is commented in this mode.
 

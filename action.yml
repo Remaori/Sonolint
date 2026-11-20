@@ -31,6 +31,12 @@ inputs:
       run compares with the baseline. baseline writes a new baseline for this runner's
       platform and puts it in the artifact, to download and commit.
     default: run
+  artifact-name:
+    description: >-
+      The name of the artifact with the reports. By default sonolint-report-<OS>, or
+      sonolint-baseline-<OS> in baseline mode. Set it when two jobs of one workflow run
+      use the same mode on the same OS.
+    default: ''
   binary:
     description: >-
       Advanced: a sonolint executable to use instead of downloading a release. Nothing
@@ -85,8 +91,8 @@ runs:
       if: always() && steps.run.outputs.report-dir != ''
       uses: actions/upload-artifact@v7
       with:
-        # The job and the OS in the name keep a matrix of runners from colliding.
-        name: sonolint-${{ inputs.mode == 'baseline' && 'baseline' || 'report' }}-${{ github.job }}-${{ runner.os }}
+        # The OS keeps a matrix of runners apart; the mode, the run and the baseline of one job.
+        name: ${{ inputs.artifact-name || format('sonolint-{0}-{1}', inputs.mode == 'baseline' && 'baseline' || 'report', runner.os) }}
         path: ${{ steps.run.outputs.report-dir }}
         if-no-files-found: warn
 
