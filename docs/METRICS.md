@@ -220,7 +220,8 @@ results and never compared.
 
 **The status of a scenario** is the worst of its values and its `expect` rules, in this
 order: `error` > `regressed` = `changed` > `assertion_failed` > `removed` > `improved` >
-`new` > `pass`. A scenario of the baseline that no longer runs is `removed`.
+`new` > `pass`. A scenario of the baseline that no longer runs is `removed`. The reports
+show `assertion_failed` as `rule failed`.
 
 **Known limit.** Every channel gets the same signal, so a plugin that swaps left and
 right gives the same values and the swap goes unnoticed. Different signals per

@@ -18,7 +18,7 @@ const std::map<std::string, std::vector<FieldInfo>>& metricCatalog()
         { "aliasing", { { "aliasing_dbc", db, lower, 2.0 }, { "components", count, target, 0.0 }, { "skipped", count, target, 0.0 } } },
         { "frequency_response", { { "freqs_hz", hz, target, 0.0 }, { "magnitude_db", db, target, 0.1 },
                                   { "phase_deg", degrees, report, 2.0 }, { "gain_1k_db", db, target, 0.1 } } },
-        { "latency", { { "reported_samples", samples, target, 0.0 }, { "measured_samples", samples, target, 0.5 },
+        { "latency", { { "reported_samples", samples, target, 0.0, true }, { "measured_samples", samples, target, 0.5 },
                        { "mismatch_samples", samples, target, 0.5 } } },
         { "determinism", { { "bit_identical", flag, target, 0.0 }, { "max_diff_dbfs", db, target, 0.0 } } },
         { "block_invariance", { { "max_diff_dbfs", db, lower, 3.0 }, { "rms_diff_dbfs", db, lower, 3.0 } } },

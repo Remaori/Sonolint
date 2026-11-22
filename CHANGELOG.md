@@ -36,7 +36,8 @@ Windows x64 and macOS.
   internet, light and dark, with the frequency response and the harmonics against the
   baseline) and `junit.xml`. The terminal shows a table of what didn't pass. Every
   report lists the worst first, in words like `-51.5 dBc (was -79.8, +28.3; tolerance
-  ±2)`, with one row for channels that moved alike.
+  ±2) · breaks rule ≤ 0.5`, with one row for channels or matrix variants that moved
+  alike.
 - **Other commands:** `sonolint list-params` lists a plugin's parameters, `sonolint
   render` sends one signal through it to a WAV file, and `--save-audio` keeps the audio
   of every scenario.

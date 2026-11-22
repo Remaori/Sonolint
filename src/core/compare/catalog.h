@@ -23,6 +23,7 @@ struct FieldInfo
     Unit unit;
     Direction direction;
     double tolerance = 0.0;   // the default `abs` tolerance, in the field's unit
+    bool perPlugin = false;   // one value for the whole plugin, repeated in every channel
 };
 
 // Every metric group with its fields and their defaults (docs/METRICS.md).
