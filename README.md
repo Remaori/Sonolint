@@ -76,7 +76,7 @@ runs on your machine; download it from
 | `level` | Peak, RMS, gain and DC offset |
 | `true_peak` | The peak between samples, and the sample peak |
 | `harmonics` | THD, THD+N and the 2nd to 10th harmonics of a sine |
-| `aliasing` | Partials above Nyquist that fold back into the audible band |
+| `aliasing` | Harmonics above half the sample rate that fold back below it |
 | `frequency_response` | Magnitude at each step of a stepped sine; phase for information |
 | `latency` | The latency the plugin reports against the one measured |
 | `determinism` | Whether two renders of the same input are identical |
