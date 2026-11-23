@@ -16,7 +16,7 @@
   </testsuite>
   <testsuite name="transparent-1k" tests="6" failures="1" errors="0" skipped="0">
     <testcase classname="transparent-1k" name="expect level.gain_db">
-      <failure message="is -0.08, expected 0 ± 0.05"/>
+      <failure message="-0.08 dB · breaks rule 0 ± 0.05"/>
     </testcase>
     <testcase classname="transparent-1k" name="expect harmonics.thd_db"/>
     <testcase classname="transparent-1k" name="harmonics.h_dbc (channel 1)"/>

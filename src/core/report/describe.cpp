@@ -146,13 +146,6 @@ bool meets (double value, const json& rule)
     return rule.at ("equals").is_number() && value == rule["equals"].get<double>();
 }
 
-// "0.9 dBTP · breaks rule ≤ 0.5".
-std::string showBrokenRule (const json& assertion)
-{
-    const auto rule = showRule (assertion.at ("rule"));
-    return assertion.at ("actual").is_array() ? "some points break rule " + rule : showRuleValue (assertion) + " · breaks rule " + rule;
-}
-
 // The change of a compared entry with so many decimals: of a value, the difference of
 // the values as written, so the row adds up; of a curve, its largest.
 double changeWritten (const json& entry, int decimals)
@@ -314,6 +307,12 @@ std::string showRuleValue (const json& assertion)
         ++decimals;
 
     return showRounded (actual.get<double>(), decimals) + unitOf (metric);   // a failed rule shows its number, floor or not
+}
+
+std::string showBrokenRule (const json& assertion)
+{
+    const auto rule = showRule (assertion.at ("rule"));
+    return assertion.at ("actual").is_array() ? "some points break rule " + rule : showRuleValue (assertion) + " · breaks rule " + rule;
 }
 
 std::string showSharedChannels (const std::string& metric, size_t channels)

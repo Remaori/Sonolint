@@ -35,6 +35,9 @@ ComparedCells cellsOf (const nlohmann::json& entry);
 // rounding would change whether it meets the rule.
 std::string showRuleValue (const nlohmann::json& assertion);
 
+// A failed `expect` rule: "0.9 dBTP · breaks rule ≤ 0.5", "some points break rule ≤ 0".
+std::string showBrokenRule (const nlohmann::json& assertion);
+
 // The channels of a row they all share: "both", "all 3", or nothing for a field with one
 // value for the whole plugin.
 std::string showSharedChannels (const std::string& metric, size_t channels);
