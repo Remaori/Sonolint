@@ -14,10 +14,12 @@ A checklist, in order. Nothing is public until you publish: a tag only creates a
 ## 2. Tag
 
 For a pre-release to try first, add `-rc.1`, `-rc.2` and so on to the tag; the version
-in `CMakeLists.txt` stays `x.y.z`.
+in `CMakeLists.txt` stays `x.y.z`. The tag goes on `origin/main`, whatever the branch
+you are on.
 
 ```bash
-git tag vx.y.z          # or vx.y.z-rc.1
+git fetch origin &&
+git tag vx.y.z origin/main &&
 git push origin vx.y.z
 ```
 

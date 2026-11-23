@@ -114,11 +114,16 @@ baseline workflow on the branch and download its artifact; or, with the
 
 ```bash
 gh workflow run sonolint-baseline.yml --ref my-branch
-# a few seconds later, the run it started:
-run=$(gh run list --workflow sonolint-baseline.yml --branch my-branch --limit 1 --json databaseId --jq '.[0].databaseId')
-gh run watch "$run"
-rm sonolint/baseline.json     # gh doesn't overwrite files
-gh run download "$run" --name sonolint-baseline-myplugin-windows-x64 --dir sonolint
+```
+
+A few seconds later, when the run has started, wait for it and take its file. The old
+one goes first, because `gh` doesn't overwrite files:
+
+```bash
+run=$(gh run list --workflow sonolint-baseline.yml --branch my-branch --limit 1 --json databaseId --jq '.[0].databaseId') &&
+gh run watch "$run" &&
+rm sonolint/baseline.json &&
+gh run download "$run" --name sonolint-baseline-myplugin-windows-x64 --dir sonolint &&
 git diff sonolint/baseline.json
 ```
 

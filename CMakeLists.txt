@@ -14,7 +14,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
 if(MSVC)
-    add_compile_options(/MP)   # compile the files of a target in parallel
+    add_compile_options(/MP)      # compile the files of a target in parallel
+    add_compile_options(/utf-8)   # the sources are UTF-8 whatever the language of Windows
 endif()
 
 enable_testing()
