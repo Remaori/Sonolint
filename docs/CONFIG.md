@@ -306,6 +306,6 @@ itself, so those keys can't be set.
 | --- | --- |
 | 0 | Nothing fails under `--fail-on` |
 | 1 | Something fails under `--fail-on`, or a scenario timed out |
-| 2 | The config, the baseline file or the command line is wrong |
+| 2 | The config, the baseline file or the command line is wrong, or a file or folder can't be read or written |
 | 3 | The plugin couldn't be loaded |
 | 4 | A bug in Sonolint |

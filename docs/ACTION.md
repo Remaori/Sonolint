@@ -40,7 +40,7 @@ Each job keeps its own comment, and so does each plugin when a repository tests 
 | `plugin` | required | Path to the `.vst3` |
 | `config` | `sonolint.yml` | Path to the config |
 | `baseline` | `sonolint/baseline.json` | Path to the baseline |
-| `version` | the ref the Action is pinned to | The Sonolint release to download, such as `v0.1.0`. With `@v0`, the newest published `v0.x` release, pre-releases left out |
+| `version` | the ref the Action is pinned to | The Sonolint release to download, such as `v0.1.0`. With `@v0`, the newest published `v0.x` release, pre-releases left out. Needed when you pin the Action by commit, which doesn't say a version |
 | `fail-on` | `regressions` | What fails the job: `regressions`, `assertions` or `none` ([CONFIG.md](CONFIG.md#running)) |
 | `comment` | `true` | Comment the report on the pull request |
 | `mode` | `run` | `run` measures and compares; `baseline` writes a new baseline (below) |
@@ -70,6 +70,9 @@ Each job keeps its own comment, and so does each plugin when a repository tests 
    next push instead of adding another. Each `id` has its own comment. A token that
    can't comment, as in a pull request from a fork, only gives a warning.
 6. Fails the job with Sonolint's exit code, if it isn't 0.
+
+If Sonolint doesn't finish (a wrong config, a plugin that can't be loaded, a crash or a
+hang), the comment and the job summary say that instead of keeping an earlier result.
 
 ## Making the baseline
 

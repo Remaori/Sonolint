@@ -30,10 +30,10 @@ if ($env:INPUT_MODE -eq 'baseline') {
         "Download it and commit it as $env:INPUT_BASELINE.`n")
 }
 elseif ($env:INPUT_MODE -eq 'run') {
+    $runUrl = "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
     $arguments = @('run', '--config', $env:INPUT_CONFIG, '--plugin', $env:INPUT_PLUGIN, '--baseline', $env:INPUT_BASELINE,
                    '--out', $out, '--fail-on', $env:INPUT_FAIL_ON, '--format', 'md,html,json,junit',   # the outputs come from results.json
-                   '--artifact-url', "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID",
-                   '--commit', $env:COMMIT_SHA)
+                   '--artifact-url', $runUrl, '--commit', $env:COMMIT_SHA)
 
     # In a pull request, the checkout is its merge into the base branch: that is what gets measured.
     if ($env:BASE_REF)      { $arguments += @('--merged-into', $env:BASE_REF) }
@@ -43,8 +43,21 @@ elseif ($env:INPUT_MODE -eq 'run') {
     & $env:SONOLINT_EXE @arguments
     $code = $LASTEXITCODE
 
+    # Without a report, one that says so: the comment of an earlier push would keep showing
+    # its result.
     $report = Join-Path $out 'report.md'
-    if (Test-Path $report) { Get-Content -Raw $report | Add-Content $env:GITHUB_STEP_SUMMARY }
+    if (-not (Test-Path $report)) {
+        $why = switch ($code) {
+            1 { 'a scenario ran past its time limit' }
+            2 { 'the config, the baseline file or an input of the Action is wrong' }
+            3 { "the plugin couldn't be loaded" }
+            4 { 'there is a bug in Sonolint' }
+            default { 'it ended unexpectedly, perhaps because the plugin crashed' }
+        }
+        Set-Content -Encoding utf8 $report ("<!-- sonolint:report -->`n## Sonolint: $id`n`n**Sonolint didn't finish:** $why (exit code $code). " +
+            "[The log]($runUrl) says more.")
+    }
+    Get-Content -Raw $report | Add-Content $env:GITHUB_STEP_SUMMARY
 
     $results = Join-Path $out 'results.json'
     if (Test-Path $results) {

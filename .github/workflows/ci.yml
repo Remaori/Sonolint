@@ -33,6 +33,16 @@ jobs:
           tar -xzf actionlint.tar.gz actionlint
           ./actionlint -color
 
+      # Most workflows run on Linux, so this is the first thing many people will see.
+      - name: Check that the Action says why it doesn't run on Linux
+        shell: pwsh
+        env:
+          INPUT_VERSION: v0.1.0
+        run: |
+          $output = "$(pwsh -File scripts/get-sonolint.ps1 2>&1)"
+          if ($LASTEXITCODE -ne 1 -or -not $output.Contains('::error::Sonolint has binaries for Windows x64 and macOS only')) { throw "exit $LASTEXITCODE, said '$output'" }
+          exit 0
+
   windows:
     name: Windows x64
     runs-on: windows-latest
@@ -192,6 +202,29 @@ jobs:
           }
           $environment = (Get-Content -Raw (Join-Path $env:REPORT_DIR 'results.json') | ConvertFrom-Json).environment
           if (-not $environment.runner_image_os) { throw 'the runner image is not in results.json' }
+
+      # What a comment would say instead of keeping the result of an earlier push.
+      - name: Run the Action on a config that isn't there
+        id: broken
+        continue-on-error: true
+        uses: ./
+        with:
+          id: broken-${{ runner.os }}
+          comment: 'false'
+          binary: self-test/sonolint-cli_artefacts/Release/${{ matrix.exe }}
+          plugin: self-test/tests/fixtures/SonolintFixture_artefacts/Release/VST3/SonolintFixture.vst3
+          config: tests/integration/not-there.yml
+
+      - name: Check that it fails and says why
+        shell: pwsh
+        env:
+          OUTCOME: ${{ steps.broken.outcome }}
+          STATUS: ${{ steps.broken.outputs.status }}
+          REPORT_DIR: ${{ steps.broken.outputs.report-dir }}
+        run: |
+          if ($env:OUTCOME -ne 'failure' -or $env:STATUS -ne 'fail') { throw "outcome '$env:OUTCOME', status '$env:STATUS'" }
+          $report = Get-Content -Raw (Join-Path $env:REPORT_DIR 'report.md')
+          if (-not $report.StartsWith('<!-- sonolint:report -->') -or -not $report.Contains("didn't finish:** the config")) { throw "report.md says: $report" }
 
       - name: Make a baseline with the Action
         id: baseline
