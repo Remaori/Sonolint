@@ -43,6 +43,11 @@ Decisions taken while writing `action.yml`, its scripts and the release workflow
   release is marked as a pre-release. The release workflow only reacts to `v*.*.*`, so
   moving `v0` doesn't start it. `@v0` resolves to the newest release that isn't a
   pre-release.
+- **External actions are pinned by commit,** with the version in a comment, in the
+  workflows and inside `action.yml`: a tag can be moved, a commit can't. Dependabot
+  updates both. The examples in the documentation keep the tags, which are easier to read.
+- **`actionlint` checks the workflows in CI,** downloaded at a fixed version and checksum,
+  with the `shellcheck` of the runner. It also checks how the workflows use `action.yml`.
 - **The macOS zip is made with `zip`,** which keeps the executable bit; PowerShell's
   `Compress-Archive` would drop it. The Action sets the bit again anyway, since
   artifacts lose it too.
