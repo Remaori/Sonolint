@@ -61,26 +61,78 @@ int decimalsOf (double value)
 
 bool integral (const json& value) { return value.is_number() && value.get<double>() == std::round (value.get<double>()); }
 
-std::string fixed (double value, int decimals)
+std::string signedText (double value, int decimals)
 {
-    std::ostringstream out;
-    out.imbue (std::locale::classic());
-    out << std::fixed << std::setprecision (decimals) << roundedTo (value, decimals) + 0.0;   // + 0.0 turns -0 into 0
-    return out.str();
+    const auto text = showRounded (value, decimals);
+    return text.find_first_not_of ("-0.") != std::string::npos && value > 0.0 ? "+" + text : text;
 }
 
-std::string fixedSigned (double value, int decimals)
+// What the catalog says of "group.field"; null for a field it doesn't have.
+const FieldInfo* fieldOf (const std::string& metric)
 {
-    const auto text = fixed (value, decimals);
-    return text.find_first_not_of ("-0.") != std::string::npos && value > 0.0 ? "+" + text : text;
+    const auto dot = metric.find ('.');
+    const auto group = metricCatalog().find (metric.substr (0, dot));
+
+    if (dot == std::string::npos || group == metricCatalog().end())
+        return nullptr;
+
+    const auto& fields = group->second;
+    const auto field = std::find_if (fields.begin(), fields.end(), [&] (const FieldInfo& f) { return f.name == metric.substr (dot + 1); });
+    return field != fields.end() ? &*field : nullptr;
+}
+
+// Whether a field counts things, so that its whole values are written whole.
+bool countable (const std::string& metric)
+{
+    const auto* field = fieldOf (metric);
+    return field != nullptr && (field->unit == Unit::samples || field->unit == Unit::count);
+}
+
+bool belowFloor (const std::string& metric, const json& value)
+{
+    const auto* field = fieldOf (metric);
+    return field != nullptr && field->unit == Unit::db && value.is_number() && value.get<double>() < kFloorDb;
+}
+
+// A value as the comparison takes it: dB values count from the floor.
+double comparedValue (const std::string& metric, const json& value) { return belowFloor (metric, value) ? kFloorDb : value.get<double>(); }
+
+// "-51.5" and the unit, or "below floor (-130 dB)": no number there is a measurement.
+std::string written (const std::string& metric, const json& value, int decimals, const std::string& unit)
+{
+    return belowFloor (metric, value) ? "below floor (" + showValue (kFloorDb) + " dB)" : showRounded (value.get<double>(), decimals) + unit;
+}
+
+// The unit of a change: between two values in dBc, dBFS or dBTP it is plain dB.
+std::string unitOfChange (const std::string& metric)
+{
+    const auto* field = fieldOf (metric);
+    return field != nullptr && field->unit == Unit::db ? " dB" : unitOf (metric);
+}
+
+// A value in a cell of a table.
+std::string cellText (const std::string& metric, const json& value, int decimals)
+{
+    if (value.is_null())     return "-";
+    if (value.is_array())    return std::to_string (value.size()) + " points";
+    if (value.is_number())   return written (metric, value, decimals, unitOf (metric));
+
+    return showValue (value);
+}
+
+// The decimals of a value alone: one, or the tolerance's own when it has more.
+int decimalsAlone (const std::string& metric, const json& value, double tolerance)
+{
+    return countable (metric) && integral (value) && integral (json (tolerance)) ? 0 : std::max (1, decimalsOf (tolerance));
 }
 
 // The tolerance a value was compared with: abs plus rel of the baseline.
 double toleranceOf (const json& entry)
 {
     const auto& tolerance = entry.at ("tolerance");
-    const auto& baseline = entry.value ("baseline", json());
-    return tolerance.value ("abs", 0.0) + tolerance.value ("rel", 0.0) * (baseline.is_number() ? std::abs (baseline.get<double>()) : 0.0);
+    const auto baseline = entry.value ("baseline", json());
+    const auto size = baseline.is_number() ? std::abs (comparedValue (entry.at ("metric").get<std::string>(), baseline)) : 0.0;
+    return tolerance.value ("abs", 0.0) + tolerance.value ("rel", 0.0) * size;
 }
 
 // Whether a value would meet an expect rule.
@@ -94,44 +146,52 @@ bool meets (double value, const json& rule)
     return rule.at ("equals").is_number() && value == rule["equals"].get<double>();
 }
 
-// "0.9 dBTP · breaks rule ≤ 0.5": as many decimals as the rule has, at least one, and
-// more while the rounded value would meet the rule.
+// "0.9 dBTP · breaks rule ≤ 0.5".
 std::string showBrokenRule (const json& assertion)
 {
-    const auto& actual = assertion.at ("actual");
-    const auto& rule = assertion.at ("rule");
-
-    if (actual.is_array())
-        return "some points break rule " + showRule (rule);
-
-    if (! actual.is_number())
-        return showValue (actual) + " · breaks rule " + showRule (rule);
-
-    auto decimals = 0;
-    auto exact = integral (actual);
-
-    for (const auto& [key, limit] : rule.items())
-        for (const auto& number : limit.is_array() ? limit : json::array ({ limit }))
-            if (number.is_number())
-            {
-                decimals = std::max (decimals, decimalsOf (number.get<double>()));
-                exact = exact && integral (number);
-            }
-
-    decimals = exact ? 0 : std::max (1, decimals);
-
-    while (decimals < 6 && meets (roundedTo (actual.get<double>(), decimals), rule))
-        ++decimals;
-
-    return fixed (actual.get<double>(), decimals) + unitOf (assertion.at ("metric").get<std::string>()) + " · breaks rule " + showRule (rule);
+    const auto rule = showRule (assertion.at ("rule"));
+    return assertion.at ("actual").is_array() ? "some points break rule " + rule : showRuleValue (assertion) + " · breaks rule " + rule;
 }
 
-// How a compared value moved, and the rule it breaks, if `rule` isn't null. One decimal,
-// or the tolerance's own when it has more, for every number of the row; the change is
-// the difference of the values as written, so the row adds up. More decimals only when
-// fewer would read as within the tolerance, or as meeting the rule.
+// The change of a compared entry with so many decimals: of a value, the difference of
+// the values as written, so the row adds up; of a curve, its largest.
+double changeWritten (const json& entry, int decimals)
+{
+    const auto metric = entry.at ("metric").get<std::string>();
+
+    return entry.at ("actual").is_array() ? entry.at ("delta").get<double>()
+                                          : roundedTo (comparedValue (metric, entry.at ("actual")), decimals)
+                                                - roundedTo (comparedValue (metric, entry.at ("baseline")), decimals);
+}
+
+// The decimals of every number of a compared row: one, or the tolerance's own when it has
+// more. A row that didn't pass gets more only when fewer would read as within the
+// tolerance, or as meeting the rule, if `rule` isn't null.
+int decimalsOfRow (const json& entry, const json& rule)
+{
+    const auto metric = entry.at ("metric").get<std::string>();
+    const auto& actual = entry.at ("actual");
+    const auto scalar = ! actual.is_array();
+    const auto tolerance = toleranceOf (entry);
+    const auto whole = countable (metric) && integral (entry.at ("delta")) && integral (json (tolerance))
+                    && (! scalar || (integral (actual) && integral (entry.at ("baseline"))));
+
+    auto decimals = whole ? 0 : std::max (1, decimalsOf (entry.at ("tolerance").value ("abs", 0.0)));
+
+    if (entry.value ("status", "") == "pass")
+        return decimals;
+
+    while (decimals < 6 && (roundedTo (std::abs (changeWritten (entry, decimals)), decimals) <= tolerance
+                            || (scalar && ! rule.is_null() && meets (roundedTo (actual.get<double>(), decimals), rule))))
+        ++decimals;
+
+    return decimals;
+}
+
+// How a compared value moved, and the rule it breaks, if `rule` isn't null.
 std::string movementText (const json& entry, const json& rule)
 {
+    const auto metric = entry.at ("metric").get<std::string>();
     const auto& actual = entry.at ("actual");
     const auto& baseline = entry.at ("baseline");
     const auto breaks = rule.is_null() ? std::string() : " · breaks rule " + showRule (rule);
@@ -142,41 +202,22 @@ std::string movementText (const json& entry, const json& rule)
     if (! entry.contains ("delta"))
         return showValue (actual) + " (was " + showValue (baseline) + ")" + breaks;
 
-    const auto delta = entry["delta"].get<double>();
-    const auto tolerance = toleranceOf (entry);
-    const auto unit = unitOf (entry.at ("metric").get<std::string>());
-    const auto scalar = ! actual.is_array();
-    const auto exact = integral (entry["delta"]) && integral (json (tolerance)) && (! scalar || (integral (actual) && integral (baseline)));
-    auto decimals = exact ? 0 : std::max (1, decimalsOf (entry.at ("tolerance").value ("abs", 0.0)));
-
-    const auto shown = [&] (int places) { return scalar ? roundedTo (actual.get<double>(), places) - roundedTo (baseline.get<double>(), places) : delta; };
-
-    while (decimals < 6 && (roundedTo (std::abs (shown (decimals)), decimals) <= tolerance
-                            || (scalar && ! rule.is_null() && meets (roundedTo (actual.get<double>(), decimals), rule))))
-        ++decimals;
-
+    const auto decimals = decimalsOfRow (entry, rule);
+    const auto change = signedText (changeWritten (entry, decimals), decimals);
     const auto within = "tolerance ±" + showTolerance (entry.at ("tolerance"));
 
-    if (! scalar)
+    if (actual.is_array())
         return std::to_string (entry.at ("points_outside").get<int>()) + " of " + std::to_string (actual.size()) + " points moved, the most by "
-             + fixedSigned (delta, decimals) + unit + "; " + within + breaks;
+             + change + unitOfChange (metric) + "; " + within + breaks;
 
-    return fixed (actual.get<double>(), decimals) + unit + " (was " + fixed (baseline.get<double>(), decimals) + ", "
-         + fixedSigned (shown (decimals), decimals) + "; " + within + ")" + breaks;
+    return written (metric, actual, decimals, unitOf (metric)) + " (was " + written (metric, baseline, decimals, "") + ", " + change + "; " + within + ")" + breaks;
 }
 
 // Whether a field has one value for the whole plugin, like the latency it reports.
 bool perPlugin (const std::string& metric)
 {
-    const auto dot = metric.find ('.');
-    const auto group = metricCatalog().find (metric.substr (0, dot));
-
-    if (dot == std::string::npos || group == metricCatalog().end())
-        return false;
-
-    const auto& fields = group->second;
-    const auto info = std::find_if (fields.begin(), fields.end(), [&] (const FieldInfo& f) { return f.name == metric.substr (dot + 1); });
-    return info != fields.end() && info->perPlugin;
+    const auto* field = fieldOf (metric);
+    return field != nullptr && field->perPlugin;
 }
 
 // "bs=64, 512" when the variants differ in one setting; else "sr=44100,bs=64; sr=48000,bs=64".
@@ -197,6 +238,14 @@ std::string showVariants (const std::vector<std::string>& variants)
 }
 } // namespace
 
+std::string showRounded (double value, int decimals)
+{
+    std::ostringstream out;
+    out.imbue (std::locale::classic());
+    out << std::fixed << std::setprecision (decimals) << roundedTo (value, decimals) + 0.0;   // + 0.0 turns -0 into 0
+    return out.str();
+}
+
 std::string showValue (const json& value)
 {
     if (! value.is_number_float())
@@ -205,23 +254,74 @@ std::string showValue (const json& value)
     std::ostringstream out;
     out.imbue (std::locale::classic());
     out << std::setprecision (6) << value.get<double>();
-    return out.str();
+
+    if (out.str().find ('e') == std::string::npos)
+        return out.str();
+
+    // No scientific notation: people read 0.000041, and a Mermaid chart only reads that.
+    const auto number = value.get<double>();
+    return showRounded (number, decimalsOf (roundedTo (number, 6)));
+}
+
+std::string showMeasured (const std::string& metric, const json& value)
+{
+    const auto* field = fieldOf (metric);
+    return cellText (metric, value, decimalsAlone (metric, value, field != nullptr ? field->tolerance : 0.0));
+}
+
+ComparedCells cellsOf (const json& entry)
+{
+    const auto metric = entry.at ("metric").get<std::string>();
+    const auto actual = entry.value ("actual", json()), baseline = entry.value ("baseline", json());
+
+    if (! entry.contains ("delta"))   // new, removed, yes/no, or curves of different lengths
+    {
+        const auto tolerance = entry.at ("tolerance").value ("abs", 0.0);
+        return { cellText (metric, baseline, decimalsAlone (metric, baseline, tolerance)), cellText (metric, actual, decimalsAlone (metric, actual, tolerance)), "" };
+    }
+
+    const auto decimals = decimalsOfRow (entry, json());
+    const auto change = entry["delta"].get<double>() == 0.0 ? "0" : signedText (changeWritten (entry, decimals), decimals);
+
+    return { cellText (metric, baseline, decimals), cellText (metric, actual, decimals),
+             belowFloor (metric, actual) && belowFloor (metric, baseline) ? "-" : (actual.is_array() ? "max Δ " : "") + change + unitOfChange (metric) };
+}
+
+std::string showRuleValue (const json& assertion)
+{
+    const auto metric = assertion.at ("metric").get<std::string>();
+    const auto& actual = assertion.at ("actual");
+    const auto& rule = assertion.at ("rule");
+    const auto passed = assertion.at ("passed").get<bool>();
+
+    if (! actual.is_number() || (passed && belowFloor (metric, actual)))
+        return cellText (metric, actual, 0);
+
+    auto decimals = 0;
+    auto whole = countable (metric) && integral (actual);
+
+    for (const auto& [key, limit] : rule.items())
+        for (const auto& number : limit.is_array() ? limit : json::array ({ limit }))
+            if (number.is_number())
+            {
+                decimals = std::max (decimals, decimalsOf (number.get<double>()));
+                whole = whole && integral (number);
+            }
+
+    decimals = whole ? 0 : std::max (1, decimals);
+
+    while (decimals < 6 && meets (roundedTo (actual.get<double>(), decimals), rule) != passed)
+        ++decimals;
+
+    return showRounded (actual.get<double>(), decimals) + unitOf (metric);   // a failed rule shows its number, floor or not
+}
+
+std::string showSharedChannels (const std::string& metric, size_t channels)
+{
+    return perPlugin (metric) ? "" : channels == 2 ? "both" : "all " + std::to_string (channels);
 }
 
 std::string showMovement (const json& entry) { return movementText (entry, json()); }
-
-std::string showSigned (double value) { return (value > 0.0 ? "+" : "") + showValue (value); }
-
-std::string showCell (const json& value)
-{
-    if (value.is_null())
-        return "-";
-
-    if (value.is_array())
-        return std::to_string (value.size()) + " points";
-
-    return showValue (value);
-}
 
 std::string showRule (const json& rule)
 {
@@ -299,7 +399,8 @@ std::vector<Problem> problemsOf (const json& scenario)
         if (shared)
         {
             rows.resize (1);
-            rows.front().metric = metric + (perPlugin (metric) ? "" : channels == 2 ? " (both channels)" : " (all " + std::to_string (channels) + " channels)");
+            const auto names = showSharedChannels (metric, channels);
+            rows.front().metric = metric + (names.empty() ? "" : " (" + names + " channels)");
         }
 
         // A failed rule of this value joins its row, when the value has just one.

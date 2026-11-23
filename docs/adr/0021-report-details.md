@@ -25,6 +25,17 @@ Decisions taken while writing the terminal table, `report.md`, `report.html` and
   scenario. A rule whose value has no row, or more than one, stands alone.
 - **`assertion_failed` reads `rule failed`** in every report; `results.json` keeps the
   name of the specification. Rules are written with symbols: `≤ 0.5`, `0 ± 0.05`.
+- **The detail tables follow the same rules:** units, the same decimals, numbers aligned
+  to the right, and one row for channels that read the same. A change is in dB between
+  two values in dBc, dBFS or dBTP, and it is `0` only when nothing changed (`0.0` is a
+  change smaller than the decimals). Nothing is in scientific notation, which people
+  don't read and a Mermaid chart doesn't parse.
+- **Below the floor of the comparison (-130 dB) there is no number:** the reports say
+  `below floor (-130 dB)`, since -138 and -150 count as equal there, and a change from
+  below it counts from the floor, as the comparison does. A failed rule does show its
+  number, because rules have no floor.
+- **In the HTML report the cards of what passed are folded;** a card that passed with a
+  warning stays open, so the warning is read.
 - **Red for errors, regressions and failed rules; amber for changes and anything
   removed.** A change is a difference to look at, not yet a fault. The word is always
   there, so the colour is never the only signal.
