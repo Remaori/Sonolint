@@ -51,7 +51,7 @@ std::vector<TestCase> casesOf (const json& scenario)
     for (const auto& assertion : scenario.value ("assertions", json::array()))
     {
         const auto failed = ! assertion.at ("passed").get<bool>();
-        cases.push_back ({ "expect " + assertion.at ("metric").get<std::string>(), failed ? "failure" : "", failed ? showBrokenRule (assertion) : "" });
+        cases.push_back ({ "expect " + assertion.at ("metric").get<std::string>(), failed ? "failure" : "", failed ? (assertion.contains ("channels") ? showChannels (assertion["channels"].get<std::vector<int>>()) + ": " : "") + showBrokenRule (assertion) : "" });
     }
 
     for (const auto& entry : scenario.value ("comparison", json::array()))

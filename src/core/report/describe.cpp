@@ -309,6 +309,12 @@ std::string showRuleValue (const json& assertion)
     return showRounded (actual.get<double>(), decimals) + unitOf (metric);   // a failed rule shows its number, floor or not
 }
 
+std::string showRuleMetric (const json& assertion)
+{
+    return assertion.at ("metric").get<std::string>()
+         + (assertion.contains ("channels") ? " (" + showChannels (assertion["channels"].get<std::vector<int>>()) + ")" : "");
+}
+
 std::string showBrokenRule (const json& assertion)
 {
     const auto rule = showRule (assertion.at ("rule"));
@@ -402,13 +408,19 @@ std::vector<Problem> problemsOf (const json& scenario)
             rows.front().metric = metric + (names.empty() ? "" : " (" + names + " channels)");
         }
 
-        // A failed rule of this value joins its row, when the value has just one.
+        // A failed rule of this value joins its row, when the value has just one and it
+        // stands for the same channels.
         for (size_t a = 0; a < assertions.size() && rows.size() == 1 && rows.front().status != "removed"; ++a)
         {
             if (assertions[a].at ("passed").get<bool>() || assertions[a].at ("metric") != metric)
                 continue;
 
             auto& row = rows.front();
+            const auto all = shared || channels == 1;
+
+            if (assertions[a].contains ("channels") ? all || assertions[a]["channels"] != json::array ({ row.source.at ("channel") }) : ! all)
+                continue;
+
             row.text = movementText (row.source, assertions[a].at ("rule"));
             row.status = severity (row.status) < severity ("assertion_failed") ? row.status : "assertion_failed";
             joined[a] = true;
@@ -419,7 +431,7 @@ std::vector<Problem> problemsOf (const json& scenario)
 
     for (size_t a = 0; a < assertions.size(); ++a)
         if (! assertions[a].at ("passed").get<bool>() && ! joined[a])
-            problems.push_back ({ "assertion_failed", assertions[a].at ("metric").get<std::string>(), showBrokenRule (assertions[a]), assertions[a] });
+            problems.push_back ({ "assertion_failed", showRuleMetric (assertions[a]), showBrokenRule (assertions[a]), assertions[a] });
 
     std::stable_sort (problems.begin(), problems.end(), worse);
     return problems;

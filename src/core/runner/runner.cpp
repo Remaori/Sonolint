@@ -166,30 +166,70 @@ json toJson (const Expectation& rule)
     return { { "equals", rule.flag ? json (*rule.flag) : json (rule.value) } };
 }
 
-// A curve passes when every one of its points does; points without a value don't count.
-bool holds (const Expectation& rule, const json& actual)
+// How far a value is from meeting a rule: 0 when it does. For a curve, its farthest
+// point; points without a value don't count.
+double distanceTo (const Expectation& rule, const json& actual)
 {
     if (actual.is_array())
-        return std::all_of (actual.begin(), actual.end(), [&] (const json& point) { return point.is_null() || holds (rule, point); });
+    {
+        double farthest = 0.0;
+
+        for (const auto& point : actual)
+            if (! point.is_null())
+                farthest = std::max (farthest, distanceTo (rule, point));
+
+        return farthest;
+    }
 
     if (rule.flag)
-        return actual.is_boolean() && actual.get<bool>() == *rule.flag;
+        return actual.is_boolean() && actual.get<bool>() == *rule.flag ? 0.0 : HUGE_VAL;
 
     if (! actual.is_number())
-        return false;
+        return HUGE_VAL;
 
     const auto value = actual.get<double>();
 
     switch (rule.kind)
     {
-        case Expectation::Kind::approx:   return std::abs (value - rule.value) <= rule.other;
-        case Expectation::Kind::min:      return value >= rule.value;
-        case Expectation::Kind::max:      return value <= rule.value;
-        case Expectation::Kind::between:  return value >= rule.value && value <= rule.other;
+        case Expectation::Kind::approx:   return std::max (0.0, std::abs (value - rule.value) - rule.other);
+        case Expectation::Kind::min:      return std::max (0.0, rule.value - value);
+        case Expectation::Kind::max:      return std::max (0.0, value - rule.value);
+        case Expectation::Kind::between:  return std::max ({ 0.0, rule.value - value, value - rule.other });
         case Expectation::Kind::equals:   break;
     }
 
-    return value == rule.value;
+    return std::abs (value - rule.value);
+}
+
+// A rule on one field of a measured group, which has to hold on every channel. When it
+// doesn't, the value shown is that of the channel farthest from meeting it.
+json evaluate (const std::string& path, const Expectation& rule, const json& group, const std::string& field)
+{
+    const auto channels = group.value ("per_channel", json::array ({ group }));   // cpu has one value for all of them
+    auto actual = group.at (field);
+    auto broken = json::array();
+    double farthest = 0.0;
+
+    for (size_t c = 0; c < channels.size(); ++c)
+    {
+        const auto distance = distanceTo (rule, channels[c].at (field));
+
+        if (distance > 0.0)
+            broken.push_back (c + 1);
+
+        if (distance > farthest)
+        {
+            farthest = distance;
+            actual = channels[c].at (field);
+        }
+    }
+
+    json assertion { { "metric", path }, { "rule", toJson (rule) }, { "actual", actual }, { "passed", broken.empty() }, { "default", rule.isDefault } };
+
+    if (! broken.empty() && broken.size() < channels.size())
+        assertion["channels"] = broken;   // the ones that break it, when they aren't all
+
+    return assertion;
 }
 
 bool measures (const Scenario& scenario, const std::string& group)
@@ -297,9 +337,17 @@ struct Measurement
         return { start, end - start };
     }
 
+    // Everything that gets analysed, which in a stepped sine is all of its steps.
+    Segment whole() const
+    {
+        const auto& first = signal.segments.front();
+        const auto& last  = signal.segments.back();
+        return { first.start, last.start + last.length - first.start, first.freqHz };
+    }
+
     std::span<const float> window (const std::vector<float>& channel) const
     {
-        const auto [start, length] = range (signal.segments.front());
+        const auto [start, length] = range (whole());
         return std::span (channel).subspan (start, length);
     }
 
@@ -308,7 +356,7 @@ struct Measurement
         const auto numChannels = aligned.size();
         const auto sampleRate  = scenario.sampleRate;
         const auto& input      = signal.audio.channels;
-        const auto& segment    = signal.segments.front();
+        const auto freqHz      = signal.segments.front().freqHz;
 
         if (group == "level")
             return perChannel (numChannels, [&] (size_t c) { return measureLevel (window (input[c]), window (aligned[c])); });
@@ -316,15 +364,15 @@ struct Measurement
         if (group == "true_peak")
             return perChannel (numChannels, [&] (size_t c)
             {
-                const auto [start, length] = range (segment);
+                const auto [start, length] = range (whole());
                 return measureTruePeak (aligned[c], start, length, sampleRate);
             });
 
         if (group == "harmonics")
-            return perChannel (numChannels, [&] (size_t c) { return measureHarmonics (window (aligned[c]), sampleRate, segment.freqHz); });
+            return perChannel (numChannels, [&] (size_t c) { return measureHarmonics (window (aligned[c]), sampleRate, freqHz); });
 
         if (group == "aliasing")
-            return perChannel (numChannels, [&] (size_t c) { return measureAliasing (window (aligned[c]), sampleRate, segment.freqHz); });
+            return perChannel (numChannels, [&] (size_t c) { return measureAliasing (window (aligned[c]), sampleRate, freqHz); });
 
         if (group == "frequency_response")
             return perChannel (numChannels, [&] (size_t c)
@@ -426,11 +474,8 @@ json runScenario (const Scenario& scenario, Renderer& renderer, const RunOptions
     for (const auto& [path, rule] : withDefaults (scenario))
     {
         const auto dot = path.find ('.');
-        const auto& actual = metrics.at (path.substr (0, dot)).at (path.substr (dot + 1));
-        const auto ok = holds (rule, actual);
-        passed = passed && ok;
-
-        assertions.push_back ({ { "metric", path }, { "rule", toJson (rule) }, { "actual", actual }, { "passed", ok }, { "default", rule.isDefault } });
+        assertions.push_back (evaluate (path, rule, metrics.at (path.substr (0, dot)), path.substr (dot + 1)));
+        passed = passed && assertions.back()["passed"].get<bool>();
     }
 
     result["status"] = passed ? "pass" : "assertion_failed";

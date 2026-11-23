@@ -79,7 +79,7 @@ They go in `defaults`, and any scenario can set its own.
 | --- | --- | --- | --- |
 | `sample_rate` | number | 48000 | In Hz |
 | `block_size` | whole number | 512 | The largest block the plugin gets |
-| `channels` | 1 or 2 | 2 | The same signal goes to every channel. The plugin must accept that layout on its main bus |
+| `channels` | 1 or 2 | 2 | The same signal goes to every channel. A scenario whose layout the plugin doesn't accept on its main bus ends as `error`, and the others run |
 | `warmup_ms` | number | 200 | Silence processed and thrown away before the signal, so parameter smoothing settles |
 | `tail_ms` | number | 100 | Silence processed after the signal |
 | `non_realtime` | true or false | false | Tells the plugin it is rendering offline. Some plugins raise their quality then |
@@ -98,7 +98,7 @@ and measured, every time on a fresh instance of the plugin.
 | `id` | text | Required and unique. Lowercase letters, digits and hyphens. It names the scenario in the baseline, so don't rename it lightly |
 | `description` | text | For people |
 | `params` | map | Parameter values. See below |
-| `state` | path | A binary state file, as a host would save it. It is applied before `params` |
+| `state` | path | A state file saved by a JUCE host (`AudioProcessor::getStateInformation`); `.vstpreset` files can't be read yet, and a file that can't be read is an error. It is applied before `params` |
 | `signal` | map | Required. What goes into the plugin |
 | `metrics` | list | Required. What to measure |
 | `expect` | map | Checks on the measured values |
@@ -116,7 +116,9 @@ error: scenario "fat50-1k": unknown parameter "Fatnes"; did you mean "Fatness"?
 ```
 
 The value is either a number from 0 to 1 (the normalized value a host sends) or
-`{ text: "..." }`, which the plugin converts from its own units. Parameters that
+`{ text: "..." }`, which the plugin converts from its own units. What it understood is
+read back: in a list of choices a text it doesn't have is an error, and for any other
+parameter a value that reads differently is a warning. Parameters that
 aren't listed keep the plugin's default. Sonolint never touches the bypass parameter
 unless you set it.
 
@@ -164,8 +166,10 @@ a field, `group.field`, of a group listed in `metrics`. Each rule is one of:
 | `{ equals: n }` | exactly `n`, which can also be `true` or `false` |
 
 For a field that is a curve, like `frequency_response.magnitude_db`, the rule applies
-to every point. A scenario with a rule that doesn't pass ends as `assertion_failed`,
-which the reports show as `rule failed`.
+to every point. A rule has to hold on every channel: in `results.json`, a broken one has
+the value of the channel farthest from meeting it and, when only some break it, their
+numbers under `channels`. A scenario with a rule that doesn't pass ends as
+`assertion_failed`, which the reports show as `rule failed`.
 
 Three rules apply by themselves when their group is measured. Write your own rule for
 the same field to replace one:

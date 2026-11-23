@@ -445,7 +445,7 @@ std::string assertionsTable (const json& scenario)
     for (const auto& assertion : assertions)
     {
         const auto passed = assertion.at ("passed").get<bool>();
-        rows += "<tr><td>" + escaped (assertion.at ("metric").get<std::string>()) + (assertion.value ("default", false) ? " <span class=\"muted\">(default)</span>" : "")
+        rows += "<tr><td>" + escaped (showRuleMetric (assertion)) + (assertion.value ("default", false) ? " <span class=\"muted\">(default)</span>" : "")
               + "</td><td>" + escaped (showRule (assertion.at ("rule"))) + "</td><td class=\"num\">" + showRuleValue (assertion) + "</td><td>"
               + statusBadge (passed ? "pass" : "fail") + "</td></tr>\n";
     }

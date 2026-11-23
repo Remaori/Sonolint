@@ -46,6 +46,24 @@ int runSonolint (const std::string& arguments)
    #endif
 }
 
+// An environment variable for the programs started while this lives.
+struct EnvironmentVariable
+{
+    explicit EnvironmentVariable (const char* nameToUse) : name (nameToUse) { set ("1"); }
+    ~EnvironmentVariable() { set (""); }
+
+    void set (const char* value) const
+    {
+       #ifdef _WIN32
+        _putenv_s (name, value);
+       #else
+        setenv (name, value, 1);
+       #endif
+    }
+
+    const char* name;
+};
+
 struct Run
 {
     int exitCode = -1;
@@ -189,6 +207,34 @@ TEST_CASE ("Buggy: each bug fails its own check and no other")
 
     CHECK (buggy.scenario ("nan")["status"] == "error");
     CHECK (buggy.scenario ("nan")["error"] == "the output has NaN or infinite samples");
+}
+
+TEST_CASE ("Mistakes: what the plugin doesn't understand or accept stops its scenario, and the others still run")
+{
+    const EnvironmentVariable stereoOnly ("SONOLINT_FIXTURE_STEREO_ONLY");
+    const auto mistakes = run ("mistakes");
+
+    CHECK (mistakes.exitCode == 1);
+    REQUIRE (mistakes.results.is_object());
+    CHECK (mistakes.results["summary"]["error"] == 3);
+    CHECK (mistakes.results["summary"]["pass"] == 3);
+
+    CHECK (mistakes.scenario ("understood")["status"] == "pass");
+    CHECK_FALSE (mistakes.scenario ("understood").contains ("warnings"));
+
+    CHECK (mistakes.scenario ("no-such-choice")["error"]
+           == "the plugin read Behaviour \"Cliper\" as \"Gain\"; it takes: Gain, Delay, Clipper, Filter, Buggy");
+    CHECK (mistakes.scenario ("not-a-state")["error"].get<std::string>().find ("is not a state saved by a JUCE host") != std::string::npos);
+    CHECK (mistakes.scenario ("mono")["error"] == "the plugin doesn't accept mono on its main bus; it accepts: stereo");
+
+    // A value that can be written in many ways: what the plugin understood is told, not judged.
+    for (const auto* id : { "not-a-number", "out-of-range" })
+    {
+        CAPTURE (id);
+        CHECK (mistakes.scenario (id)["status"] == "pass");
+        REQUIRE (mistakes.scenario (id).contains ("warnings"));
+        CHECK (mistakes.scenario (id)["warnings"][0].get<std::string>().find ("the plugin read Gain \"") == 0);
+    }
 }
 
 TEST_CASE ("sonolint render writes what came out of the plugin to a WAV file")

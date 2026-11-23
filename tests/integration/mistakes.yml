@@ -1,0 +1,34 @@
+# What Sonolint must not let pass: values the plugin doesn't understand, a state it can't
+# read and a layout it refuses. The other scenarios still run.
+version: 1
+
+scenarios:
+  - id: understood
+    params: { Behaviour: { text: "Clipper" }, Threshold: { text: "-6.0 dB" }, Delay: { text: "37" } }
+    signal: { type: sine, freq_hz: 1000, level_dbfs: -1 }
+    metrics: [level]
+
+  - id: no-such-choice
+    params: { Behaviour: { text: "Cliper" } }
+    signal: { type: sine, freq_hz: 1000, level_dbfs: -1 }
+    metrics: [level]
+
+  - id: not-a-number
+    params: { Gain: { text: "banana" } }
+    signal: { type: sine, freq_hz: 1000, level_dbfs: -6 }
+    metrics: [level]
+
+  - id: out-of-range
+    params: { Gain: { text: "40 dB" } }
+    signal: { type: sine, freq_hz: 1000, level_dbfs: -60 }
+    metrics: [level]
+
+  - id: not-a-state
+    state: mistakes.yml
+    signal: { type: sine, freq_hz: 1000, level_dbfs: -6 }
+    metrics: [level]
+
+  - id: mono
+    channels: 1
+    signal: { type: sine, freq_hz: 1000, level_dbfs: -6 }
+    metrics: [level]

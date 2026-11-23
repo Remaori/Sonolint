@@ -5,7 +5,9 @@
 #include "core/signals/prng.h"
 #include "host/juce_plugin.h"
 
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <fstream>
 
 namespace sonolint
@@ -41,8 +43,9 @@ void useMainBusOnly (juce::AudioPluginInstance& instance, int channels)
         if (instance.checkBusesLayoutSupported (layoutWith (count)))
             accepted.add (layoutName (count));
 
-    throw Error (ErrorCode::pluginLoad, "the plugin doesn't accept " + layoutName (channels) + " on its main bus; it accepts: "
-                                            + (accepted.isEmpty() ? "neither mono nor stereo" : accepted.joinIntoString (", ").toStdString()));
+    // Only this scenario's problem: the others may run with another layout.
+    throw Error (ErrorCode::config, "the plugin doesn't accept " + layoutName (channels) + " on its main bus; it accepts: "
+                                        + (accepted.isEmpty() ? "neither mono nor stereo" : accepted.joinIntoString (", ").toStdString()));
 }
 
 void loadState (juce::AudioPluginInstance& instance, const std::filesystem::path& file)
@@ -53,24 +56,74 @@ void loadState (juce::AudioPluginInstance& instance, const std::filesystem::path
         throw Error (ErrorCode::config, "could not read the state file " + toUtf8 (file));
 
     const std::vector<char> bytes ((std::istreambuf_iterator<char> (stream)), std::istreambuf_iterator<char>());
+
+    // JUCE ignores what it can't read, and the scenario would measure the plugin's defaults.
+    if (juce::AudioProcessor::getXmlFromBinary (bytes.data(), (int) bytes.size()) == nullptr)
+        throw Error (ErrorCode::config, toUtf8 (file) + " is not a state saved by a JUCE host; .vstpreset files can't be read yet");
+
     instance.setStateInformation (bytes.data(), (int) bytes.size());
 }
 
-void setParams (juce::AudioPluginInstance& instance, const PluginInfo& info, const std::vector<ParamValue>& params)
+// Whether two texts of a parameter say the same: "on" and "On", or "12 dB" and "12.0".
+bool sameText (const juce::String& asked, const juce::String& shown)
+{
+    const auto a = asked.trim(), b = shown.trim();
+
+    if (a.equalsIgnoreCase (b))
+        return true;
+
+    const auto startsWithNumber = [] (const juce::String& text) { return juce::CharacterFunctions::isDigit (text.trimCharactersAtStart ("+-.")[0]); };
+
+    if (! startsWithNumber (a) || ! startsWithNumber (b))
+        return false;
+
+    // The plugin shows its value with some decimals: half of the last one is rounding.
+    const auto decimals = b.fromFirstOccurrenceOf (".", false, false).initialSectionContainingOnly ("0123456789").length();
+    const auto rounding = std::max (0.5 * std::pow (10.0, -decimals), 1.0e-3 * std::abs (a.getDoubleValue()));
+    return std::abs (a.getDoubleValue() - b.getDoubleValue()) <= rounding + 1.0e-9;
+}
+
+// Sets a parameter from text in the plugin's own units. The plugin reads whatever it
+// can, so what it understood is read back: in a list of choices a text it doesn't have
+// is an error; elsewhere, where the same value can be written in many ways, a warning.
+void setText (juce::AudioProcessorParameter& parameter, const std::string& name, const std::string& text, std::vector<std::string>& warnings)
+{
+    constexpr int maxLength = 128;
+    const auto asked = juce::String::fromUTF8 (text.data(), (int) text.size());
+    parameter.setValueNotifyingHost (parameter.getValueForText (asked));
+    const auto shown = parameter.getText (parameter.getValue(), maxLength);
+
+    if (sameText (asked, shown))
+        return;
+
+    const auto problem = "the plugin read " + name + " \"" + text + "\" as \"" + shown.toStdString() + "\"";
+
+    if (! parameter.isDiscrete())
+    {
+        warnings.push_back (problem);
+        return;
+    }
+
+    constexpr int mostChoices = 20;
+    const auto steps = parameter.getNumSteps();
+    juce::StringArray choices;
+
+    for (int step = 0; step < std::min (steps, mostChoices); ++step)
+        choices.add (parameter.getText ((float) step / (float) std::max (1, steps - 1), maxLength));
+
+    throw Error (ErrorCode::config, problem + "; it takes: " + choices.joinIntoString (", ").toStdString() + (steps > mostChoices ? ", ..." : ""));
+}
+
+void setParams (juce::AudioPluginInstance& instance, const PluginInfo& info, const std::vector<ParamValue>& params, std::vector<std::string>& warnings)
 {
     for (const auto& param : params)
     {
         auto* parameter = instance.getParameters()[(int) findParam (info, param.key)];
 
         if (const auto* normalized = std::get_if<double> (&param.value))
-        {
             parameter->setValueNotifyingHost ((float) *normalized);
-        }
         else
-        {
-            const auto& text = std::get<std::string> (param.value);
-            parameter->setValueNotifyingHost (parameter->getValueForText (juce::String::fromUTF8 (text.data(), (int) text.size())));
-        }
+            setText (*parameter, param.key, std::get<std::string> (param.value), warnings);
     }
 }
 } // namespace
@@ -98,7 +151,7 @@ RenderResult Vst3Renderer::render (const RenderRequest& request)
 
     RenderResult result;
     result.info = describePlugin (plugin);
-    setParams (instance, result.info, request.params);
+    setParams (instance, result.info, request.params, result.warnings);
 
     instance.prepareToPlay (request.sampleRate, maxBlock);
 

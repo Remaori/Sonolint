@@ -278,6 +278,9 @@ int render (const RenderArgs& args)
     const auto result = sonolint::Vst3Renderer (args.plugin).render (request);
     sonolint::writeWav (args.out, result.output);
 
+    for (const auto& warning : result.warnings)
+        std::cerr << "warning: " << warning << "\n";
+
     std::cout << "wrote " << sonolint::toUtf8 (args.out) << ": " << (double) result.output.numSamples() / args.sampleRate
               << " s, reported latency " << result.reportedLatencySamples << " samples\n";
     return 0;
