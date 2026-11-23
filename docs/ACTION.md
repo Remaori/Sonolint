@@ -67,8 +67,8 @@ Each job keeps its own comment, and so does each plugin when a repository tests 
 3. Adds `report.md` to the job summary.
 4. Uploads the reports as the artifact `sonolint-report-<id>`, such as `sonolint-report-heft-windows-x64`.
 5. In a pull request, puts `report.md` in a comment, and edits that same comment on the
-   next push instead of adding another. Each `id` has its own comment. A token that can't comment, as in a pull request
-   from a fork, only gives a warning.
+   next push instead of adding another. Each `id` has its own comment. A token that
+   can't comment, as in a pull request from a fork, only gives a warning.
 6. Fails the job with Sonolint's exit code, if it isn't 0.
 
 ## Making the baseline
@@ -80,6 +80,7 @@ or image can move the last decimals. On a machine of your own you can run
 you start by hand:
 
 ```yaml
+# .github/workflows/sonolint-baseline.yml
 on:
   workflow_dispatch:
 
@@ -97,8 +98,39 @@ jobs:
 
 It starts from the baseline in the repository, rewrites this platform's section and
 uploads the result as `baseline.json` in the artifact `sonolint-baseline-<id>`.
-Download it, check the diff and commit it. Run it again whenever a change of sound is
-intended. Nothing is compared and nothing is commented in this mode.
+Download it, check the diff and commit it. Nothing is compared and nothing is
+commented in this mode.
+
+## Accepting a change of sound
+
+When a pull request changes the sound on purpose, Sonolint reports what moved and the
+job fails. To accept the change, make a new baseline from the pull request's branch,
+on the runner that compares, and commit it to that branch. In the Actions tab, run the
+baseline workflow on the branch and download its artifact; or, with the
+[GitHub CLI](https://cli.github.com/):
+
+```bash
+gh workflow run sonolint-baseline.yml --ref my-branch
+# a few seconds later, the run it started:
+run=$(gh run list --workflow sonolint-baseline.yml --branch my-branch --limit 1 --json databaseId --jq '.[0].databaseId')
+gh run watch "$run"
+rm sonolint/baseline.json     # gh doesn't overwrite files
+gh run download "$run" --name sonolint-baseline-myplugin-windows-x64 --dir sonolint
+git diff sonolint/baseline.json
+```
+
+Commit `sonolint/baseline.json` and push. The job passes again, and the diff of the
+baseline shows the reviewer which values changed and by how much. `gh workflow run`
+needs the workflow on the default branch, but runs the version on `--ref`.
+
+- **From a fork,** the branch isn't in your repository, so `--ref` can't name it. The
+  contributor can run the workflow in their fork, once Actions are enabled there, and
+  commit the file the same way. A maintainer can also push the branch to the
+  repository and run it there, after reviewing the code, since it then runs with the
+  repository's token.
+- **On your own machine,** `sonolint baseline update` rewrites only the section of the
+  platform it runs on (`macos-arm64` on an Apple Silicon Mac), so it can't accept a
+  change that a Windows runner measured.
 
 ## Advanced: `binary`
 
