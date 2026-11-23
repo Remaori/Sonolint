@@ -26,6 +26,10 @@ How Sonolint builds its test signals and what each metric means, with the formul
 - **Several channels.** Every metric is measured on each channel. The value reported
   is the worst channel, which is the highest number (for a yes/no field, "no"); for a
   curve, point by point. `results.json` also keeps each channel under `per_channel`.
+  The `expect` rules and the comparison with the baseline look at every channel, not
+  at that value.
+- **Stepped sines.** `level`, `true_peak` and `silence` take all the steps in one
+  stretch, from the end of the first `skip_ms` to the end of the last step.
 - **NaN and infinity.** A single one anywhere in the output makes the scenario an
   `error`, whatever was asked.
 

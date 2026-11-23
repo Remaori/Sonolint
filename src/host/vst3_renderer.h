@@ -15,8 +15,8 @@ class Vst3Renderer : public Renderer
 public:
     explicit Vst3Renderer (std::filesystem::path pluginPathToUse, std::string pluginNameToUse = {});
 
-    // Throws Error (pluginLoad) if the plugin can't be loaded or doesn't accept the
-    // channel layout, and Error (config) for a bad parameter or state file.
+    // Throws Error (pluginLoad) if the plugin can't be loaded, and Error (config) for a
+    // channel layout it doesn't accept or a bad parameter or state file.
     RenderResult render (const RenderRequest& request) override;
 
 private:

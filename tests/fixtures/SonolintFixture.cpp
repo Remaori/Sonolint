@@ -46,8 +46,10 @@ public:
 
     bool isBusesLayoutSupported (const BusesLayout& layouts) const override
     {
+        // SONOLINT_FIXTURE_STEREO_ONLY refuses mono, to see what a refused layout does to a run.
+        const auto mono = juce::SystemStats::getEnvironmentVariable ("SONOLINT_FIXTURE_STEREO_ONLY", {}).isEmpty();
         const auto main = layouts.getMainOutputChannelSet();
-        return main == layouts.getMainInputChannelSet() && (main == juce::AudioChannelSet::mono() || main == juce::AudioChannelSet::stereo());
+        return main == layouts.getMainInputChannelSet() && ((mono && main == juce::AudioChannelSet::mono()) || main == juce::AudioChannelSet::stereo());
     }
 
     void prepareToPlay (double newSampleRate, int largestBlock) override

@@ -35,6 +35,10 @@ ComparedCells cellsOf (const nlohmann::json& entry);
 // rounding would change whether it meets the rule.
 std::string showRuleValue (const nlohmann::json& assertion);
 
+// The metric of an `expect` rule, with the channels that break it when they aren't all:
+// "level.gain_db (channel 2)".
+std::string showRuleMetric (const nlohmann::json& assertion);
+
 // A failed `expect` rule: "0.9 dBTP · breaks rule ≤ 0.5", "some points break rule ≤ 0".
 std::string showBrokenRule (const nlohmann::json& assertion);
 

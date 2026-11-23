@@ -11,7 +11,8 @@ records why.
   field keeps one rule. Each channel's own values stay in `results.json` under
   `per_channel`. Known weakness: a change in the channel with the lower value of a
   `target` metric doesn't show in the reported value. Whether the baseline should
-  keep the channels apart is decided with the baseline.
+  keep the channels apart is decided with the baseline. The `expect` rules looked at
+  that value too until [ADR 0024](0024-nothing-passes-unmeasured.md).
 - **`plugin.name` is a config key.** A `.vst3` can hold several plugins and something
   has to say which one; the strict parser needs the key to be known.
 - **`defaults.timeout_s` sets the time limit of a scenario** (60 s). A render that

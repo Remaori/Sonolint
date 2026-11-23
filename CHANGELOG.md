@@ -28,6 +28,8 @@ Windows x64 and macOS.
   isn't deterministic and one that depends on the block size fail without any rule.
 - **Test signals:** sine, stepped sine, impulse, white and pink noise, silence and WAV
   files, the same on every run.
+- **Nothing passes unmeasured:** a rule has to hold on every channel, and a text value, a
+  state or a channel layout that the plugin doesn't take is reported instead of ignored.
 - **Baseline:** `sonolint baseline update` stores the accepted values in
   `sonolint/baseline.json`, one section per platform. Commit it: an intentional change of
   sound then shows up in the pull request.

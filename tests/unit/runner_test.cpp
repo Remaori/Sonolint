@@ -50,7 +50,7 @@ const json& assertionOn (const json& scenario, const std::string& metric)
 }
 } // namespace
 
-TEST_CASE ("runner: measures every channel and reports the worst one")
+TEST_CASE ("runner: measures every channel and reports the worst one, and a rule has to hold on every channel")
 {
     // The right channel comes out 6 dB lower than the left one.
     test::LambdaRenderer renderer ([] (const sonolint::RenderRequest& request)
@@ -68,16 +68,24 @@ TEST_CASE ("runner: measures every channel and reports the worst one")
     const auto results = sonolint::runScenarios (scenarios ("  - id: gain\n"
                                                             "    signal: { type: sine, freq_hz: 1000, level_dbfs: -6 }\n"
                                                             "    metrics: [level]\n"
-                                                            "    expect: { level.gain_db: { approx: 0.0, tol: 0.05 } }\n"),
+                                                            "    expect: { level.gain_db: { approx: 0.0, tol: 0.05 }, level.peak_dbfs: { max: -5 } }\n"
+                                                            "  - id: wide\n"
+                                                            "    signal: { type: sine, freq_hz: 1000, level_dbfs: -6 }\n"
+                                                            "    metrics: [level]\n"
+                                                            "    expect: { level.gain_db: { between: [-7, 1] } }\n"
+                                                            "  - id: low\n"
+                                                            "    signal: { type: sine, freq_hz: 1000, level_dbfs: -6 }\n"
+                                                            "    metrics: [level]\n"
+                                                            "    expect: { level.gain_db: { min: 1 } }\n"),
                                                  kPlugin, renderer);
 
     CHECK (results["schema"] == "sonolint.results/v1");
     CHECK (results["plugin"]["name"] == "Fake");
-    REQUIRE (results["scenarios"].size() == 1);
+    REQUIRE (results["scenarios"].size() == 3);
 
     const auto& scenario = results["scenarios"][0];
     CHECK (scenario["id"] == "gain");
-    CHECK (scenario["status"] == "pass");
+    CHECK (scenario["status"] == "assertion_failed");
     CHECK (scenario["config"]["sample_rate"] == 48000.0);
     CHECK (scenario["config"]["signal"]["type"] == "sine");
 
@@ -87,9 +95,48 @@ TEST_CASE ("runner: measures every channel and reports the worst one")
     CHECK_THAT (level["per_channel"][1]["gain_db"].get<double>(), WithinAbs (-6.0206, 1.0e-3));
     CHECK_THAT (level["peak_dbfs"].get<double>(), WithinAbs (-6.0, 1.0e-3));
 
-    CHECK (assertionOn (scenario, "level.gain_db")["passed"] == true);
+    // The right channel alone breaks this rule, and its value is the one shown.
+    const auto& gain = assertionOn (scenario, "level.gain_db");
+    CHECK (gain["passed"] == false);
+    CHECK_THAT (gain["actual"].get<double>(), WithinAbs (-6.0206, 1.0e-3));
+    CHECK (gain["channels"] == json::array ({ 2 }));
+    CHECK (assertionOn (scenario, "level.peak_dbfs")["passed"] == true);
+
+    CHECK (results["scenarios"][1]["status"] == "pass");
+
+    // Both break this one: the farther one is shown, and no channel is named.
+    const auto& low = assertionOn (results["scenarios"][2], "level.gain_db");
+    CHECK_THAT (low["actual"].get<double>(), WithinAbs (-6.0206, 1.0e-3));
+    CHECK_FALSE (low.contains ("channels"));
+
     CHECK (results["summary"]["pass"] == 1);
-    CHECK_FALSE (sonolint::fails (results, sonolint::FailOn::regressions));
+    CHECK (sonolint::fails (results, sonolint::FailOn::regressions));
+    CHECK (sonolint::formatSummary (results).find ("level.gain_db (channel 2): -6.02 dB · breaks rule 0 ± 0.05") != std::string::npos);
+}
+
+TEST_CASE ("runner: level and true peak take every step of a stepped sine")
+{
+    // Full level for the first step and 20 dB less for the second one.
+    test::FakeRenderer renderer ([] (const std::vector<float>& input)
+    {
+        auto output = input;
+
+        for (size_t n = 16800; n < output.size(); ++n)   // a step is 250 ms plus the 100 ms that are skipped
+            output[n] *= 0.1f;
+
+        return output;
+    });
+
+    const auto results = sonolint::runScenarios (scenarios ("  - id: steps\n"
+                                                            "    signal: { type: stepped_sine, points: [1000, 2000], level_dbfs: -6 }\n"
+                                                            "    metrics: [level, true_peak]\n"),
+                                                 kPlugin, renderer);
+
+    const auto& metrics = results["scenarios"][0]["metrics"];
+
+    // 250 ms at 0 dB, since the first 100 ms are skipped, and 350 ms at -20 dB.
+    CHECK_THAT (metrics["level"]["gain_db"].get<double>(), WithinAbs (10.0 * std::log10 ((250.0 + 350.0 * 0.01) / 600.0), 0.05));
+    CHECK_THAT (metrics["true_peak"]["true_peak_dbtp"].get<double>(), WithinAbs (-6.0, 0.05));
 }
 
 TEST_CASE ("runner: a failed expectation fails the scenario and says what was measured")

@@ -205,3 +205,31 @@ TEST_CASE ("report: no number is written in scientific notation")
     CHECK (sonolint::showValue (1234567.0) == "1234567");
     CHECK (sonolint::showMeasured ("level.dc", 1.23e-5) == "0.0000");
 }
+
+TEST_CASE ("report: a rule broken by some channels names them, and joins only a row that stands for the same ones")
+{
+    auto rule = failedRule ("level.gain_db", 0.1, 0.5);
+    rule["channels"] = { 2 };
+    CHECK (sonolint::showRuleMetric (rule) == "level.gain_db (channel 2)");
+
+    const auto rowsWith = [&] (const std::string& firstChannel, double first)
+    {
+        const json scenario { { "id", "x" }, { "status", "changed" }, { "assertions", { rule } },
+                              { "comparison", { entry ("level.gain_db", 1, firstChannel, first, 0.0, 0.05), entry ("level.gain_db", 2, "changed", 0.5, 0.0, 0.05) } } };
+        return sonolint::problemsOf (scenario);
+    };
+
+    // Only channel 2 moved: the same channel that breaks the rule.
+    auto rows = rowsWith ("pass", 0.0);
+    REQUIRE (rows.size() == 1);
+    CHECK (rows[0].metric == "level.gain_db (channel 2)");
+    CHECK (rows[0].text == "0.50 dB (was 0.00, +0.50; tolerance ±0.05) · breaks rule ≤ 0.1");
+
+    // Both moved alike, and one of them breaks it: the rule says which on its own row.
+    rows = rowsWith ("changed", 0.5);
+    REQUIRE (rows.size() == 2);
+    CHECK (rows[0].metric == "level.gain_db (both channels)");
+    CHECK (rows[0].text.find ("breaks") == std::string::npos);
+    CHECK (rows[1].metric == "level.gain_db (channel 2)");
+    CHECK (rows[1].text == "0.5 dB · breaks rule ≤ 0.1");
+}
