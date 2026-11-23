@@ -76,7 +76,7 @@ void addEnvironment (json& results, const std::vector<std::string>& extra)
 {
     results["sonolint_version"] = SONOLINT_VERSION;
     results["environment"] = { { "platform", sonolint::currentPlatform() },
-                               { "os", juce::SystemStats::getOperatingSystemName().toStdString() },
+                               { "os", juce::SystemStats::getOperatingSystemName().replace ("Mac OSX", "macOS").toStdString() },
                                { "cpu", juce::SystemStats::getCpuModel().toStdString() } };
     results["environment"].update (parseEnvironment (extra));
 }

@@ -15,7 +15,7 @@ inline nlohmann::json reportResults()
       "schema": "sonolint.results/v1",
       "sonolint_version": "0.1.0",
       "plugin": { "name": "Example", "vendor": "Acme", "version": "1.2.3" },
-      "environment": { "platform": "macos-arm64", "os": "Mac OSX 27.2.1", "cpu": "Apple M5" },
+      "environment": { "platform": "macos-arm64", "os": "macOS 27.2.1", "cpu": "Apple M5" },
       "scenarios": [
         { "id": "fat50-response", "status": "changed", "description": "Fatness 50 % keeps the lows",
           "config": { "sample_rate": 48000.0, "block_size": 512, "channels": 2, "params": { "Fatness": 0.5 },

@@ -13,9 +13,6 @@ namespace
 {
 using json = nlohmann::json;
 
-// dB values below this are equal: numerical noise in a transparent plugin isn't a change.
-constexpr double kFloorDb = -130.0;
-
 // Room for the rounding of the stored values, far below any tolerance.
 constexpr double kRoundingSlack = 1.0e-9;
 

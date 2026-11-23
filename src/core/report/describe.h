@@ -9,16 +9,35 @@ namespace sonolint
 {
 // What every report needs to put the results into words.
 
-// A number as people read it: up to 6 significant digits and "." as the decimal point,
-// whatever the language of the system. Anything else as JSON.
+// A number as people read it: up to 6 significant digits, never in scientific notation,
+// and "." as the decimal point, whatever the language of the system. Anything else as JSON.
 std::string showValue (const nlohmann::json& value);
 
-// "+0.2", "-0.4" or "0".
-std::string showSigned (double value);
+// A number with so many decimals.
+std::string showRounded (double value, int decimals);
 
-// A value of the baseline or of this run in a table: a number, true or false, "-" for
-// none, or "31 points" for a curve.
-std::string showCell (const nlohmann::json& value);
+// A measured value alone: "-51.5 dBc", "110 samples", "true", "-" for none, "31 points"
+// for a curve, or "below floor (-130 dB)". One decimal, or as many as the default
+// tolerance of the field.
+std::string showMeasured (const std::string& metric, const nlohmann::json& value);
+
+// The cells of a compared value, with the decimals of showMovement: "-79.8 dBc",
+// "-51.5 dBc" and "+28.3 dB", or "max Δ 0 dB" for a curve. A change is 0 only when
+// nothing changed, and "-" when both values are below the floor.
+struct ComparedCells
+{
+    std::string baseline, actual, change;
+};
+
+ComparedCells cellsOf (const nlohmann::json& entry);
+
+// The value an `expect` rule looked at, with the decimals of the rule, and more when
+// rounding would change whether it meets the rule.
+std::string showRuleValue (const nlohmann::json& assertion);
+
+// The channels of a row they all share: "both", "all 3", or nothing for a field with one
+// value for the whole plugin.
+std::string showSharedChannels (const std::string& metric, size_t channels);
 
 // An `expect` rule: "0 ± 0.05", "≤ -100", "≥ 0", "-1 to 1", "= true".
 std::string showRule (const nlohmann::json& rule);

@@ -1,5 +1,6 @@
 #include "core/report/html.h"
 
+#include "core/compare/catalog.h"
 #include "core/compare/compare.h"
 
 #include <algorithm>
@@ -44,6 +45,8 @@ a { color: inherit; }
 table { border-collapse: collapse; width: 100%; font-size: 14px; }
 th, td { text-align: left; padding: 6px 10px 6px 0; border-bottom: 1px solid var(--grid); vertical-align: top; }
 th { color: var(--ink-2); font-weight: 600; }
+.num { text-align: right; }
+.num + :not(.num) { padding-left: 10px; }
 td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .status { white-space: nowrap; font-weight: 600; font-size: 14px; }
 .status::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: var(--muted); }
@@ -71,6 +74,9 @@ svg.chart { display: block; width: 100%; height: auto; max-width: 720px; }
 .hit:hover { fill: var(--hover); }
 details { margin-top: 8px; font-size: 14px; }
 summary { cursor: pointer; color: var(--ink-2); }
+details.card { margin-top: 24px; font-size: inherit; }
+details.card > summary { color: var(--ink); }
+details.card > summary > h2 { display: inline-flex; margin: 0; }
 footer { margin-top: 32px; color: var(--ink-2); font-size: 13px; }
 )";
 
@@ -146,6 +152,9 @@ Axis roundAxis (double low, double high)
     return { std::floor (low / step + 1.0e-9) * step, std::ceil (high / step - 1.0e-9) * step, step };
 }
 
+// The two curves that are drawn.
+const std::string kResponse = "frequency_response.magnitude_db", kHarmonics = "harmonics.h_dbc";
+
 constexpr double kWidth = 640.0, kHeight = 300.0, kLeft = 52.0, kRight = 16.0, kTop = 28.0, kBottom = 40.0;
 constexpr double kPlotWidth = kWidth - kLeft - kRight, kPlotHeight = kHeight - kTop - kBottom;
 
@@ -177,16 +186,16 @@ std::string legend (bool lines, bool hasBaseline)
 }
 
 // The values behind a chart, so none of them depends on hovering.
-std::string valuesTable (const std::vector<std::string>& labels, const json& actual, const json& baseline, const std::string& unit)
+std::string valuesTable (const std::vector<std::string>& labels, const std::string& metric, const json& actual, const json& baseline)
 {
     std::string rows;
 
     for (size_t i = 0; i < labels.size(); ++i)
-        rows += "<tr><td>" + labels[i] + "</td><td class=\"num\">" + showCell (actual.at (i)) + "</td>"
-              + (baseline.is_array() ? "<td class=\"num\">" + showCell (baseline.at (i)) + "</td>" : "") + "</tr>\n";
+        rows += "<tr><td>" + labels[i] + "</td><td class=\"num\">" + showMeasured (metric, actual.at (i)) + "</td>"
+              + (baseline.is_array() ? "<td class=\"num\">" + showMeasured (metric, baseline.at (i)) + "</td>" : "") + "</tr>\n";
 
-    return "<details><summary>Values (" + unit + ")</summary>\n<table><tr><th></th><th>This run</th>" + (baseline.is_array() ? "<th>Baseline</th>" : "")
-         + "</tr>\n" + rows + "</table></details>\n";
+    return std::string ("<details><summary>Values</summary>\n<table><tr><th></th><th class=\"num\">This run</th>")
+         + (baseline.is_array() ? "<th class=\"num\">Baseline</th>" : "") + "</tr>\n" + rows + "</table></details>\n";
 }
 
 // The values of one curve that can be drawn: a number for each point.
@@ -269,8 +278,8 @@ std::string responseChart (const ChannelCurve& curve, const json& freqs, const s
         const auto hz = freqs[i].get<double>();
         const auto from = i == 0 ? kLeft : (x (freqs[i - 1].get<double>()) + x (hz)) / 2;
         const auto to = i + 1 == freqs.size() ? kWidth - kRight : (x (hz) + x (freqs[i + 1].get<double>())) / 2;
-        const auto tip = frequencyText (hz) + ": this run " + showCell (curve.actual[i]) + " dB"
-                       + (hasBaseline ? ", baseline " + showCell (curve.baseline[i]) + " dB" : "");
+        const auto tip = frequencyText (hz) + ": this run " + showMeasured (kResponse, curve.actual[i])
+                       + (hasBaseline ? ", baseline " + showMeasured (kResponse, curve.baseline[i]) : "");
 
         svg += "<rect class=\"hit\" x=\"" + at (from) + "\" y=\"" + at (kTop) + "\" width=\"" + at (to - from) + "\" height=\"" + at (kPlotHeight)
              + "\"><title>" + escaped (tip) + "</title></rect>\n";
@@ -289,9 +298,9 @@ std::string responseChart (const ChannelCurve& curve, const json& freqs, const s
             if (! curve.baseline[i].is_number())
                 continue;
 
-            const auto stored = curve.baseline[i].get<double>();
+            const auto stored = std::max (curve.baseline[i].get<double>(), kFloorDb);
 
-            if (std::abs (std::max (value, -130.0) - std::max (stored, -130.0)) > abs + rel * std::abs (stored) + 1.0e-9)
+            if (std::abs (std::max (value, kFloorDb) - stored) > abs + rel * std::abs (stored) + 1.0e-9)
             {
                 dots += "<circle class=\"moved\" cx=\"" + at (x (freqs[i].get<double>())) + "\" cy=\"" + at (y (value)) + "\" r=\"4\"/>\n";
                 ++moved;
@@ -308,7 +317,7 @@ std::string responseChart (const ChannelCurve& curve, const json& freqs, const s
         labels.push_back (frequencyText (hz.get<double>()));
 
     return "<h3>" + escaped (title) + "</h3>\n" + legend (true, hasBaseline) + svg + "</svg>\n"
-         + valuesTable (labels, curve.actual, hasBaseline ? curve.baseline : json(), "dB");
+         + valuesTable (labels, kResponse, curve.actual, hasBaseline ? curve.baseline : json());
 }
 
 // A bar with a rounded top and a square foot, from `foot` up (or down) to `top`.
@@ -343,7 +352,7 @@ std::string harmonicsChart (const ChannelCurve& curve, const std::string& title)
             high = std::max (high, value);
         }
 
-    if (high <= -130.0)   // nothing above the floor of the comparison: an empty chart would say less than this
+    if (high <= kFloorDb)   // nothing above the floor of the comparison: an empty chart would say less than this
         return "<h3>" + escaped (title) + "</h3>\n<p class=\"muted\">Every harmonic from H2 to H10 is below -130 dBc"
              + std::string (hasBaseline ? ", in this run and in the baseline." : ".") + "</p>\n";
 
@@ -375,16 +384,16 @@ std::string harmonicsChart (const ChannelCurve& curve, const std::string& title)
         }
 
         if (hasBaseline && curve.baseline[i].is_number())
-            svg += bar (first, width, floor, y (curve.baseline[i].get<double>()), "base", name + ", baseline: " + showValue (curve.baseline[i]) + " dBc");
+            svg += bar (first, width, floor, y (curve.baseline[i].get<double>()), "base", name + ", baseline: " + showMeasured (kHarmonics, curve.baseline[i]));
 
         svg += bar (hasBaseline ? first + width + 2.0 : first, width, floor, y (curve.actual[i].get<double>()), "run",
-                    name + ", this run: " + showValue (curve.actual[i]) + " dBc");
+                    name + ", this run: " + showMeasured (kHarmonics, curve.actual[i]));
     }
 
     svg += "<line class=\"axis\" x1=\"" + at (kLeft) + "\" x2=\"" + at (kWidth - kRight) + "\" y1=\"" + at (floor) + "\" y2=\"" + at (floor) + "\"/>\n";
 
     return "<h3>" + escaped (title) + "</h3>\n" + legend (false, hasBaseline) + svg + "</svg>\n"
-         + valuesTable (labels, curve.actual, hasBaseline ? curve.baseline : json(), "dBc");
+         + valuesTable (labels, kHarmonics, curve.actual, hasBaseline ? curve.baseline : json());
 }
 
 std::string settings (const json& scenario)
@@ -437,51 +446,90 @@ std::string assertionsTable (const json& scenario)
     {
         const auto passed = assertion.at ("passed").get<bool>();
         rows += "<tr><td>" + escaped (assertion.at ("metric").get<std::string>()) + (assertion.value ("default", false) ? " <span class=\"muted\">(default)</span>" : "")
-              + "</td><td>" + escaped (showRule (assertion.at ("rule"))) + "</td><td class=\"num\">" + showCell (assertion.at ("actual")) + "</td><td>"
+              + "</td><td>" + escaped (showRule (assertion.at ("rule"))) + "</td><td class=\"num\">" + showRuleValue (assertion) + "</td><td>"
               + statusBadge (passed ? "pass" : "fail") + "</td></tr>\n";
     }
 
-    return "<h3>Rules</h3>\n<table><tr><th>Metric</th><th>Expected</th><th>This run</th><th>Result</th></tr>\n" + rows + "</table>\n";
+    return "<h3>Rules</h3>\n<table><tr><th>Metric</th><th>Expected</th><th class=\"num\">This run</th><th>Result</th></tr>\n" + rows + "</table>\n";
 }
+
+// The rows of a metric: `cells` has the cells of each channel, and channels that read the
+// same share a row.
+std::string channelRows (const std::string& metric, const std::vector<std::pair<int, std::string>>& cells)
+{
+    const auto name = "<tr><td>" + escaped (metric) + "</td><td>";
+    const auto shared = std::all_of (cells.begin(), cells.end(), [&] (const auto& channel) { return channel.second == cells.front().second; });
+
+    if (shared && (cells.size() > 1 || showSharedChannels (metric, cells.size()).empty()))
+    {
+        const auto names = showSharedChannels (metric, cells.size());
+        return name + (names.empty() ? "-" : names) + "</td>" + cells.front().second + "</tr>\n";
+    }
+
+    std::string rows;
+
+    for (const auto& [channel, text] : cells)
+        rows += name + std::to_string (channel) + "</td>" + text + "</tr>\n";
+
+    return rows;
+}
+
+std::string numberCell (const std::string& text) { return "<td class=\"num\">" + escaped (text) + "</td>"; }
 
 // Every value of the scenario: against the baseline when there was a comparison, alone otherwise.
 std::string valuesOf (const json& scenario)
 {
-    std::string rows;
+    // The cells of each metric by channel, with the metrics in their order.
+    std::vector<std::pair<std::string, std::vector<std::pair<int, std::string>>>> metrics;
 
-    if (scenario.contains ("comparison"))
+    const auto add = [&] (const std::string& metric, int channel, const std::string& cells)
+    {
+        const auto known = std::find_if (metrics.begin(), metrics.end(), [&] (const auto& other) { return other.first == metric; });
+        (known != metrics.end() ? known->second : metrics.emplace_back (metric, std::vector<std::pair<int, std::string>>()).second).emplace_back (channel, cells);
+    };
+
+    const auto compared = scenario.contains ("comparison");
+
+    if (compared)
     {
         for (const auto& entry : scenario["comparison"])
         {
             const auto status = entry.at ("status").get<std::string>();
-            const auto delta = entry.contains ("delta") ? showSigned (entry["delta"].get<double>()) + (entry.contains ("points_outside") ? " largest" : "") : "";
+            const auto cells = cellsOf (entry);
 
-            rows += "<tr><td>" + escaped (entry.at ("metric").get<std::string>()) + "</td><td class=\"num\">" + showValue (entry.at ("channel")) + "</td><td class=\"num\">"
-                  + showCell (entry.value ("baseline", json())) + "</td><td class=\"num\">" + showCell (entry.value ("actual", json())) + "</td><td class=\"num\">"
-                  + delta + "</td><td class=\"num\">" + escaped (showTolerance (entry.at ("tolerance"))) + "</td><td>"
-                  + (entry.value ("report_only", false) && status != "pass" ? "<span class=\"status st-info\">" + escaped (status) + " (for information)</span>"
-                                                                           : statusBadge (status))
-                  + "</td></tr>\n";
+            add (entry.at ("metric").get<std::string>(), entry.at ("channel").get<int>(),
+                 numberCell (cells.baseline) + numberCell (cells.actual) + numberCell (cells.change) + numberCell ("±" + showTolerance (entry.at ("tolerance"))) + "<td>"
+                     + (entry.value ("report_only", false) && status != "pass" ? "<span class=\"status st-info\">" + escaped (status) + " (for information)</span>"
+                                                                              : statusBadge (status))
+                     + "</td>");
         }
-
-        return rows.empty() ? "" : "<h3>Against the baseline</h3>\n<table><tr><th>Metric</th><th>Channel</th><th>Baseline</th><th>This run</th><th>Δ</th>"
-                                   "<th>Tolerance</th><th>Status</th></tr>\n" + rows + "</table>\n";
     }
-
-    const auto metrics = scenario.value ("metrics", json::object());
-
-    for (const auto& [group, values] : metrics.items())
+    else
     {
-        if (! values.contains ("per_channel"))
-            continue;
+        const auto groups = scenario.value ("metrics", json::object());
 
-        for (size_t c = 0; c < values["per_channel"].size(); ++c)
-            for (const auto& [field, value] : values["per_channel"][c].items())
-                rows += "<tr><td>" + escaped (group + "." + field) + "</td><td class=\"num\">" + std::to_string (c + 1) + "</td><td class=\"num\">" + showCell (value)
-                      + "</td></tr>\n";
+        for (const auto& [group, values] : groups.items())
+        {
+            const auto channels = values.value ("per_channel", json::array());
+
+            for (size_t c = 0; c < channels.size(); ++c)
+                for (const auto& [field, value] : channels[c].items())
+                    add (group + "." + field, (int) c + 1, numberCell (showMeasured (group + "." + field, value)));
+        }
     }
 
-    return rows.empty() ? "" : "<h3>Values</h3>\n<table><tr><th>Metric</th><th>Channel</th><th>This run</th></tr>\n" + rows + "</table>\n";
+    std::string rows;
+
+    for (const auto& [metric, cells] : metrics)
+        rows += channelRows (metric, cells);
+
+    if (rows.empty())
+        return {};
+
+    return (compared ? std::string ("<h3>Against the baseline</h3>\n<table><tr><th>Metric</th><th>Channel</th><th class=\"num\">Baseline</th>"
+                                    "<th class=\"num\">This run</th><th class=\"num\">Δ</th><th class=\"num\">Tolerance</th><th>Status</th></tr>\n")
+                     : std::string ("<h3>Values</h3>\n<table><tr><th>Metric</th><th>Channel</th><th class=\"num\">This run</th></tr>\n"))
+         + rows + "</table>\n";
 }
 
 std::string cpuLine (const json& scenario)
@@ -490,16 +538,18 @@ std::string cpuLine (const json& scenario)
         return {};
 
     const auto& cpu = scenario["metrics"]["cpu"];
-    return "<p class=\"muted\">CPU: " + showValue (cpu.value ("core_percent", json())) + " % of one core (real-time factor "
-         + showValue (cpu.value ("realtime_factor", json())) + "); 95 % of the blocks took under " + showValue (cpu.value ("p95_block_us", json()))
+    return "<p class=\"muted\">CPU: " + showRounded (cpu.value ("core_percent", 0.0), 2) + " % of one core (real-time factor "
+         + showRounded (cpu.value ("realtime_factor", 0.0), 4) + "); 95 % of the blocks took under " + showRounded (cpu.value ("p95_block_us", 0.0), 1)
          + " µs. Shown for information, never compared.</p>\n";
 }
 
 std::string scenarioSection (const json& scenario)
 {
     const auto id = scenario.at ("id").get<std::string>();
-    auto section = "<section class=\"card\" id=\"" + anchor (id) + "\">\n<h2>" + escaped (id) + " " + statusBadge (scenario.at ("status").get<std::string>())
-                 + "</h2>\n";
+    const auto status = scenario.at ("status").get<std::string>();
+    const auto folded = status == "pass" && scenario.value ("warnings", json::array()).empty();   // nothing in it needs reading
+    auto section = "<details class=\"card\" id=\"" + anchor (id) + "\"" + (folded ? "" : " open") + ">\n<summary><h2>" + escaped (id) + " " + statusBadge (status)
+                 + "</h2></summary>\n";
 
     if (scenario.contains ("description"))
         section += "<p class=\"muted\">" + escaped (scenario["description"].get<std::string>()) + "</p>\n";
@@ -534,7 +584,7 @@ std::string scenarioSection (const json& scenario)
     for (const auto& curve : curvesOf (scenario, "harmonics", "h_dbc"))
         section += harmonicsChart (curve, "Harmonics, " + showChannels (curve.channels));
 
-    return section + valuesOf (scenario) + cpuLine (scenario) + "</section>\n";
+    return section + valuesOf (scenario) + cpuLine (scenario) + "</details>\n";
 }
 } // namespace
 

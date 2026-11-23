@@ -120,3 +120,19 @@ TEST_CASE ("report.md: a chart of many points shows about 10 of them, always wit
     CHECK (axis.find ("\"20\"") != std::string::npos);   // the first one
     CHECK (text.find ("of its 31 points; all of them are in the HTML report.") != std::string::npos);
 }
+
+TEST_CASE ("report.md: a chart has no number in scientific notation, which Mermaid doesn't read")
+{
+    auto results = test::reportResults();
+
+    for (auto& channel : results["scenarios"][0]["metrics"]["frequency_response"]["per_channel"])
+        channel["magnitude_db"][1] = 4.12e-5;
+
+    for (auto& entry : results["scenarios"][0]["comparison"])
+        if (entry["metric"] == "frequency_response.magnitude_db")
+            entry["actual"][1] = 4.12e-5;
+
+    const auto text = sonolint::formatMarkdown (results, {});
+    CHECK (text.find ("line [0.3, 0.000041, -2.6]") != std::string::npos);
+    CHECK (text.find ("e-05") == std::string::npos);
+}

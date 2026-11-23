@@ -141,3 +141,67 @@ TEST_CASE ("report: numbers for people, with the decimals they need")
     CHECK (rule (0.891238) == "0.9 dBTP · breaks rule ≤ 0.5");
     CHECK (rule (0.54) == "0.54 dBTP · breaks rule ≤ 0.5");
 }
+
+TEST_CASE ("report: below the floor of the comparison there is no number, and the change counts from the floor")
+{
+    // The comparison clamps dB values at -130, so this entry's delta is 7.7 and not 27.7.
+    auto moved = entry ("harmonics.thdn_db", 1, "regressed", -122.3, -150.0, 1.0);
+    moved["delta"] = 7.7;
+
+    CHECK (sonolint::showMovement (moved) == "-122.3 dB (was below floor (-130 dB), +7.7; tolerance ±1)");
+
+    const auto cells = sonolint::cellsOf (moved);
+    CHECK (cells.baseline == "below floor (-130 dB)");
+    CHECK (cells.actual == "-122.3 dB");
+    CHECK (cells.change == "+7.7 dB");
+
+    // Both below it: different numbers, and nothing to compare.
+    auto equal = entry ("harmonics.thdn_db", 1, "pass", -138.2, -150.0, 1.0);
+    equal["delta"] = 0.0;
+    CHECK (sonolint::cellsOf (equal).actual == "below floor (-130 dB)");
+    CHECK (sonolint::cellsOf (equal).change == "-");
+
+    // Only dB values have a floor, and a failed rule shows its number wherever it is.
+    CHECK (sonolint::showMeasured ("silence.noise_floor_dbfs", -300.0) == "below floor (-130 dB)");
+    CHECK (sonolint::showMeasured ("latency.mismatch_samples", -200.0) == "-200.0 samples");
+
+    auto rule = failedRule ("silence.noise_floor_dbfs", -140.0, -135.0);
+    CHECK (sonolint::showRuleValue (rule) == "-135.0 dBFS");
+    rule["rule"]["max"] = -120.0;
+    rule["passed"] = true;
+    CHECK (sonolint::showRuleValue (rule) == "below floor (-130 dB)");
+}
+
+TEST_CASE ("report: the cells of the detail tables are written like the rows of what didn't pass")
+{
+    const auto cells = sonolint::cellsOf (entry ("aliasing.aliasing_dbc", 1, "regressed", -51.493, -79.796, 2.0));
+    CHECK (cells.baseline == "-79.8 dBc");
+    CHECK (cells.actual == "-51.5 dBc");
+    CHECK (cells.change == "+28.3 dB");   // between two values in dBc, plain dB
+
+    // 0 only when nothing changed; a change smaller than a decimal is 0.0.
+    CHECK (sonolint::cellsOf (entry ("harmonics.thd_db", 1, "pass", -17.809, -17.809, 1.0)).change == "0 dB");
+    CHECK (sonolint::cellsOf (entry ("harmonics.thd_db", 1, "pass", -17.807, -17.809, 1.0)).change == "0.0 dB");
+
+    // A value that passes needs no extra decimals, however close to the tolerance.
+    CHECK (sonolint::cellsOf (entry ("true_peak.true_peak_dbtp", 1, "pass", 0.1, 0.0, 0.1)).actual == "0.1 dBTP");
+
+    const json curve { { "metric", "harmonics.h_dbc" }, { "channel", 1 }, { "status", "pass" }, { "actual", { -17.8, nullptr } }, { "baseline", { -17.8, nullptr } },
+                       { "delta", 0.0 }, { "points_outside", 0 }, { "tolerance", { { "abs", 1.5 }, { "rel", 0.0 } } } };
+    CHECK (sonolint::cellsOf (curve).actual == "2 points");
+    CHECK (sonolint::cellsOf (curve).change == "max Δ 0 dB");
+
+    // A value without a baseline.
+    const json added { { "metric", "latency.reported_samples" }, { "channel", 1 }, { "status", "new" }, { "actual", 122 }, { "tolerance", { { "abs", 0.0 } } } };
+    CHECK (sonolint::cellsOf (added).baseline == "-");
+    CHECK (sonolint::cellsOf (added).actual == "122 samples");
+    CHECK (sonolint::cellsOf (added).change.empty());
+}
+
+TEST_CASE ("report: no number is written in scientific notation")
+{
+    CHECK (sonolint::showValue (4.12e-5) == "0.000041");
+    CHECK (sonolint::showValue (-4.0e-8) == "0");
+    CHECK (sonolint::showValue (1234567.0) == "1234567");
+    CHECK (sonolint::showMeasured ("level.dc", 1.23e-5) == "0.0000");
+}

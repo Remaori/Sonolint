@@ -8,6 +8,9 @@
 
 namespace sonolint
 {
+// dB values below this are equal: numerical noise in a transparent plugin isn't a change.
+inline constexpr double kFloorDb = -130.0;
+
 // How a field is rounded in the baseline: dB, samples and degrees to 3 decimals, Hz to
 // 2, linear values to 6 significant figures, and counts and yes/no as they are.
 enum class Unit { db, samples, degrees, hz, linear, count, flag };
