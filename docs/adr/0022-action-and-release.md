@@ -31,6 +31,10 @@ Decisions taken while writing `action.yml`, its scripts and the release workflow
   fails. Before 0.1.0 the artifact was named after the job and the OS, which repeated
   itself (`sonolint-baseline-sonolint-baseline-Windows`), and every job of a matrix
   edited the same comment, so the last one hid the others.
+- **When Sonolint leaves no report, the Action writes one that says so.** Otherwise the
+  comment of an earlier push stays there, perhaps with everything passing, under a job
+  that failed. It is an ordinary `report.md`, so the summary, the artifact and the
+  comment need nothing special.
 - **Any failure to comment is a warning,** not only a 403: the report is still in the
   job summary and the artifact, and the job's result is Sonolint's.
 - **The comment to edit is found by the marker at the start of its body**

@@ -294,12 +294,20 @@ int listParams (const std::filesystem::path& pluginPath, bool asJson)
     return 0;
 }
 
+// An option that takes a path. CLI11 would assign the text to it, and on Windows
+// std::filesystem::path reads text in the ANSI code page: ours is UTF-8.
+CLI::Option* addPath (CLI::App& command, const std::string& name, std::filesystem::path& path, const std::string& description)
+{
+    return command.add_option_function<std::string> (name, [&path] (const std::string& text) { path = sonolint::fromUtf8 (text); }, description)
+        ->default_str (sonolint::toUtf8 (path));
+}
+
 // The options that `run` and `baseline update` share.
 void addScenarioOptions (CLI::App& command, RunArgs& args)
 {
-    command.add_option ("--config", args.config, "The configuration file")->capture_default_str()->type_name ("PATH");
-    command.add_option ("--plugin", args.plugin, "Path to the .vst3; replaces plugin.path of the config")->type_name ("PATH");
-    command.add_option ("--baseline", args.baseline, "The baseline file")->capture_default_str()->type_name ("PATH");
+    addPath (command, "--config", args.config, "The configuration file")->type_name ("PATH");
+    addPath (command, "--plugin", args.plugin, "Path to the .vst3; replaces plugin.path of the config")->type_name ("PATH");
+    addPath (command, "--baseline", args.baseline, "The baseline file")->type_name ("PATH");
     command.add_option ("--filter", args.filters, "Only the scenarios whose id matches this glob; can be repeated")->type_name ("GLOB");
     command.add_flag ("--verbose", args.verbose, "Print each scenario as it finishes");
 }
@@ -315,7 +323,7 @@ int main (int argc, char* argv[])
     RunArgs runArgs;
     auto* runCommand = app.add_subcommand ("run", "Run the scenarios of sonolint.yml, compare them with the baseline and write results.json");
     addScenarioOptions (*runCommand, runArgs);
-    runCommand->add_option ("--out", runArgs.out, "Folder for the results")->capture_default_str()->type_name ("DIR");
+    addPath (*runCommand, "--out", runArgs.out, "Folder for the results")->type_name ("DIR");
     runCommand->add_option ("--fail-on", runArgs.failOn, "What makes the run fail")
         ->check (CLI::IsMember ({ "regressions", "assertions", "none" }))
         ->capture_default_str();
@@ -340,15 +348,15 @@ int main (int argc, char* argv[])
     std::filesystem::path listPlugin;
     bool asJson = false;
     auto* listCommand = app.add_subcommand ("list-params", "List the parameters a plugin exposes to the host");
-    listCommand->add_option ("--plugin", listPlugin, "Path to the .vst3")->required()->type_name ("PATH");
+    addPath (*listCommand, "--plugin", listPlugin, "Path to the .vst3")->required()->type_name ("PATH");
     listCommand->add_flag ("--json", asJson, "Print JSON instead of a table");
     listCommand->footer ("Example:\n  sonolint list-params --plugin build/Heft_artefacts/Release/VST3/Heft.vst3");
 
     RenderArgs renderArgs;
     auto* renderCommand = app.add_subcommand ("render", "Render one signal through the plugin to a WAV file, without measuring");
-    renderCommand->add_option ("--plugin", renderArgs.plugin, "Path to the .vst3")->required()->type_name ("PATH");
+    addPath (*renderCommand, "--plugin", renderArgs.plugin, "Path to the .vst3")->required()->type_name ("PATH");
     renderCommand->add_option ("--signal", renderArgs.signal, "The signal, like sine:freq_hz=1000,level_dbfs=-6")->required()->type_name ("SIGNAL");
-    renderCommand->add_option ("--out", renderArgs.out, "The WAV file to write")->required()->type_name ("FILE");
+    addPath (*renderCommand, "--out", renderArgs.out, "The WAV file to write")->required()->type_name ("FILE");
     renderCommand->add_option ("--param", renderArgs.params, "A parameter: normalized (Fatness=0.5) or as text (\"Output=-6 dB\"); can be repeated")
         ->type_name ("NAME=VALUE");
     renderCommand->add_option ("--sample-rate", renderArgs.sampleRate, "Sample rate in Hz")->capture_default_str();
@@ -383,6 +391,11 @@ int main (int argc, char* argv[])
     {
         std::cerr << "error: " << e.what() << "\n";
         return static_cast<int> (e.code);
+    }
+    catch (const std::filesystem::filesystem_error& e)   // a folder that can't be made or read: not a bug
+    {
+        std::cerr << "error: " << e.what() << "\n";
+        return static_cast<int> (ErrorCode::config);
     }
     catch (const std::exception& e)
     {

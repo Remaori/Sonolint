@@ -3,7 +3,8 @@
 # Writes its path as the step output `exe`.
 $ErrorActionPreference = 'Stop'
 
-function Fail ([string] $text) { Write-Output "::error::$text"; exit 1 }
+# To the host and not to the output, which an assignment would swallow.
+function Fail ([string] $text) { Write-Host "::error::$text"; exit 1 }
 
 # Advanced: an executable given directly, as Sonolint's own CI does with what it just built.
 if ($env:INPUT_BINARY) {

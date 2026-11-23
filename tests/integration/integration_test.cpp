@@ -1,5 +1,6 @@
 // Runs the real `sonolint` binary against the test plugin and reads what it wrote.
 // The paths come from CMake as compile definitions.
+#include "core/io/path_text.h"
 #include "core/io/wav.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -25,7 +26,7 @@ using json = nlohmann::json;
 namespace
 {
 // In quotes and with the separators of this system, ready for a command line.
-std::string quoted (std::filesystem::path path) { return "\"" + path.make_preferred().string() + "\""; }
+std::string quoted (std::filesystem::path path) { return "\"" + sonolint::toUtf8 (path.make_preferred()) + "\""; }
 
 std::filesystem::path fixture()
 {
@@ -39,7 +40,7 @@ int runSonolint (const std::string& arguments)
 
    #ifdef _WIN32
     command = "\"" + command + "\"";   // cmd.exe strips one pair of quotes around the whole line
-    return std::system (command.c_str());
+    return _wsystem (sonolint::fromUtf8 (command).c_str());   // std::system would read it in the ANSI code page
    #else
     const auto status = std::system (command.c_str());
     return WIFEXITED (status) ? WEXITSTATUS (status) : -1;
@@ -327,6 +328,32 @@ TEST_CASE ("Exit codes: a plugin that doesn't exist is 3 and a wrong config is 2
                         + " --no-compare --out " + out) == 3);
     CHECK (runSonolint ("run --config " + configFile ("invalid") + " --plugin " + quoted (fixture()) + " --no-compare --out " + out) == 2);
     CHECK (runSonolint ("run --config " + configFile ("gain") + " --plugin " + quoted (fixture()) + " --fail-on sometimes --out " + out) == 2);
+}
+
+TEST_CASE ("Paths: accents in the folders of the plugin, the config and the results")
+{
+    const auto folder = std::filesystem::path (SONOLINT_OUT) / u8"\u00f1and\u00fa \u00e9l\u00e8ve";
+    std::filesystem::remove_all (folder);
+    std::filesystem::create_directories (folder);
+
+    std::filesystem::copy (fixture(), folder / "SonolintFixture.vst3", std::filesystem::copy_options::recursive);
+    std::filesystem::copy (std::filesystem::path (SONOLINT_CONFIGS) / "gain.yml", folder / "gain.yml");
+
+    REQUIRE (runSonolint ("run --config " + quoted (folder / "gain.yml") + " --plugin " + quoted (folder / "SonolintFixture.vst3") + " --baseline "
+                          + quoted (folder / "none.json") + " --out " + quoted (folder / "out")) == 0);
+    CHECK (std::filesystem::exists (folder / "out" / "report.html"));
+    CHECK (runSonolint ("list-params --plugin " + quoted (folder / "SonolintFixture.vst3")) == 0);
+}
+
+TEST_CASE ("Exit codes: a folder that can't be made is 2, not a bug")
+{
+    const auto blocked = std::filesystem::path (SONOLINT_OUT) / "blocked";
+    std::filesystem::remove_all (blocked);
+    std::ofstream (blocked) << "a file where a folder should be";
+
+    CHECK (runSonolint ("run --config " + configFile ("gain") + " --plugin " + quoted (fixture()) + " --no-compare --out " + quoted (blocked / "out")) == 2);
+    CHECK (runSonolint ("baseline update --config " + configFile ("gain") + " --plugin " + quoted (fixture()) + " --baseline "
+                        + quoted (blocked / "baseline.json")) == 2);
 }
 
 TEST_CASE ("Reproducibility: two runs write the same results, apart from the machine and the times")
