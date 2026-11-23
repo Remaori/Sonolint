@@ -349,7 +349,9 @@ TEST_CASE ("Exit codes: a folder that can't be made is 2, not a bug")
 {
     const auto blocked = std::filesystem::path (SONOLINT_OUT) / "blocked";
     std::filesystem::remove_all (blocked);
+    std::filesystem::create_directories (blocked.parent_path());   // the tests run in any order, and this one may be the first
     std::ofstream (blocked) << "a file where a folder should be";
+    REQUIRE (std::filesystem::is_regular_file (blocked));
 
     CHECK (runSonolint ("run --config " + configFile ("gain") + " --plugin " + quoted (fixture()) + " --no-compare --out " + quoted (blocked / "out")) == 2);
     CHECK (runSonolint ("baseline update --config " + configFile ("gain") + " --plugin " + quoted (fixture()) + " --baseline "
