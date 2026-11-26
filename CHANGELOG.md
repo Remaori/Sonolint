@@ -13,10 +13,12 @@ The first version. Sonolint runs a compiled VST3 effect like a DAW would, measur
 it sounds and tells you in every pull request whether the sound changed. It runs on
 Windows x64 and macOS.
 
-- **GitHub Action:** `uses: Remaori/Sonolint@v0` downloads Sonolint, measures your
-  plugin, comments the report on the pull request (one comment per plugin and platform,
-  edited on every push) and fails the job when something regressed. `mode: baseline` makes the baseline
-  on the same kind of runner the comparison uses. See [`docs/ACTION.md`](docs/ACTION.md).
+- **GitHub Action:** `uses: Remaori/Sonolint@v0` downloads Sonolint, checks the
+  attestation that this repository's release workflow built it, measures your plugin,
+  comments the report on the pull request (one comment per plugin and platform, edited
+  on every push) and fails the job when something regressed. `mode: baseline` makes the
+  baseline on the same kind of runner the comparison uses. See
+  [`docs/ACTION.md`](docs/ACTION.md).
 - **`sonolint run`** reads [`sonolint.yml`](docs/CONFIG.md), renders the plugin for each
   scenario on a fresh instance, measures it and compares every value with the baseline,
   channel by channel: `pass`, `new`, `improved`, `regressed`, `changed` or `removed`. It

@@ -37,6 +37,8 @@ pre-release. If something doesn't match, there is no draft and the log says why.
    `xattr -d com.apple.quarantine sonolint` first.
 3. Run it on a plugin you know, for example
    `sonolint list-params --plugin Heft.vst3`.
+4. Check its attestation, which the Action also checks before running it:
+   `gh attestation verify <the zip> --repo Remaori/Sonolint --signer-workflow Remaori/Sonolint/.github/workflows/release.yml`.
 
 ## 4. Publish, or start over
 

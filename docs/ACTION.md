@@ -59,7 +59,10 @@ Each job keeps its own comment, and so does each plugin when a repository tests 
 ## What it does
 
 1. Downloads `sonolint-<version>-<platform>.zip` and `SHA256SUMS` from the release with
-   `gh`, checks the zip against its checksum and unzips it.
+   `gh`, checks the zip against its checksum and, with `gh attestation verify`, that
+   `release.yml` in this repository built it. Without that proof nothing is run and the
+   job fails, even if the reason is a network problem. Only the first pre-releases,
+   `v0.1.0-rc.1` to `v0.1.0-rc.3`, came before attestations and are let through.
 2. Runs `sonolint run` with every report, the link to this run for the footer, the
    commit, and the image of the runner for `results.json`. In a pull request, GitHub
    checks out its merge into the base branch, so the footer says

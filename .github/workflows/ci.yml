@@ -246,6 +246,50 @@ jobs:
           if ($platforms.Count -ne 1) { throw "expected one platform, got: $platforms" }
           Write-Output "Baseline written for $platforms"
 
+  # The Action as people use it: a published release, downloaded, checked and run.
+  self-test-release:
+    name: Action self-test with a published release (${{ matrix.os }})
+    needs: [windows, macos]
+    if: github.event_name == 'pull_request'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: self-test-${{ runner.os }}
+          path: self-test
+
+      - name: Restore the executable bits, which artifacts drop
+        if: runner.os == 'macOS'
+        run: chmod -R u+x self-test
+
+      - name: Run the Action with a release
+        id: run
+        uses: ./
+        with:
+          version: v0.1.0-rc.3
+          id: release-${{ runner.os }}
+          comment: 'false'
+          plugin: self-test/tests/fixtures/SonolintFixture_artefacts/Release/VST3/SonolintFixture.vst3
+          config: tests/integration/gain.yml
+          baseline: tests/integration/no-baseline-here.json
+
+      - name: Check that it ran
+        shell: pwsh
+        env:
+          STATUS: ${{ steps.run.outputs.status }}
+        run: if ($env:STATUS -ne 'pass') { throw "status '$env:STATUS'" }
+
   # A pull request from a fork gets a read-only token: the comment can't be posted, and
   # the job must still pass, with a warning.
   self-test-read-only:
