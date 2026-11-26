@@ -7,6 +7,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <nlohmann/json.hpp>
 
+#include <chrono>
 #include <cmath>
 #include <complex>
 #include <cstdlib>
@@ -236,6 +237,15 @@ TEST_CASE ("Mistakes: what the plugin doesn't understand or accept stops its sce
         REQUIRE (mistakes.scenario (id).contains ("warnings"));
         CHECK (mistakes.scenario (id)["warnings"][0].get<std::string>().find ("the plugin read Gain \"") == 0);
     }
+}
+
+TEST_CASE ("Time limits: a plugin that never finishes loading is stopped like one that can't load")
+{
+    const EnvironmentVariable hang ("SONOLINT_FIXTURE_HANG_ON_LOAD");
+    const auto started = std::chrono::steady_clock::now();
+
+    CHECK (run ("hang").exitCode == 3);
+    CHECK (std::chrono::steady_clock::now() - started < std::chrono::seconds (20));
 }
 
 TEST_CASE ("sonolint render writes what came out of the plugin to a WAV file")

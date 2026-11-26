@@ -246,6 +246,48 @@ jobs:
           if ($platforms.Count -ne 1) { throw "expected one platform, got: $platforms" }
           Write-Output "Baseline written for $platforms"
 
+      # A sound that moved: the report says how to accept the change.
+      - name: Make a baseline of a gain
+        id: before
+        uses: ./
+        with:
+          mode: baseline
+          id: before-${{ runner.os }}
+          binary: self-test/sonolint-cli_artefacts/Release/${{ matrix.exe }}
+          plugin: self-test/tests/fixtures/SonolintFixture_artefacts/Release/VST3/SonolintFixture.vst3
+          config: tests/integration/gain-change-before.yml
+          baseline: tests/integration/no-baseline-here.json
+
+      - name: Keep it out of the Action's folder
+        shell: pwsh
+        env:
+          REPORT_DIR: ${{ steps.before.outputs.report-dir }}
+        run: Copy-Item (Join-Path $env:REPORT_DIR 'baseline.json') self-test/gain-baseline.json
+
+      - name: Run the Action with more gain
+        id: after
+        uses: ./
+        with:
+          id: after-${{ runner.os }}
+          comment: 'false'
+          fail-on: none
+          binary: self-test/sonolint-cli_artefacts/Release/${{ matrix.exe }}
+          plugin: self-test/tests/fixtures/SonolintFixture_artefacts/Release/VST3/SonolintFixture.vst3
+          config: tests/integration/gain-change-after.yml
+          baseline: self-test/gain-baseline.json
+
+      - name: Check that the report says how to accept it
+        shell: pwsh
+        env:
+          REPORT_DIR: ${{ steps.after.outputs.report-dir }}
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          $report = Get-Content -Raw (Join-Path $env:REPORT_DIR 'report.md')
+          foreach ($part in '### Was this change intended?', "gh workflow run ci.yml --repo $env:GITHUB_REPOSITORY --ref $env:BRANCH",
+                            "--name sonolint-baseline-after-$env:RUNNER_OS".ToLowerInvariant(), 'mv sonolint-new/baseline.json self-test/gain-baseline.json') {
+              if (-not $report.Contains($part)) { throw "report.md lacks '$part':`n$report" }
+          }
+
   # The Action as people use it: a published release, downloaded, checked and run.
   self-test-release:
     name: Action self-test with a published release (${{ matrix.os }})

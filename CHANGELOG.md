@@ -5,7 +5,15 @@ the text of its release on GitHub, so it's written for people who use the tool.
 
 ## Unreleased
 
-Nothing yet.
+- **The comment says how to accept a change of sound:** when something moved, the
+  report ends with the commands that make a new baseline from the branch, with the
+  workflow, the branch and the artifact filled in. A new input, `baseline-workflow`,
+  names the workflow when it isn't the one that compares. In a pull request from a fork,
+  where no comment can be posted, the job summary says how to do it in the fork.
+- **`@v0` gets the highest stable version,** by number and never a pre-release. It used
+  to take the newest one by date.
+- **A plugin that never finishes loading** is stopped after the longest `timeout_s` of the
+  run, with exit code 3, instead of hanging the job.
 
 ## 0.1.0
 

@@ -2,6 +2,46 @@
 # Action can upload and comment before failing), status, regressions, report-dir and id.
 $ErrorActionPreference = 'Stop'
 
+# What to do if a change of sound was the point: a new baseline from this branch, made by the
+# baseline workflow on the runner that compares, and committed. Markdown for the report.
+function AcceptText ([string] $baselineFile)
+{
+    $workflow = if ($env:INPUT_BASELINE_WORKFLOW) { $env:INPUT_BASELINE_WORKFLOW } else { (($env:WORKFLOW_REF -split '@')[0] -split '/')[-1] }
+    $fork = $env:HEAD_REPO -and $env:HEAD_REPO -ne $env:GITHUB_REPOSITORY
+    $repository = if ($fork) { $env:HEAD_REPO } else { $env:GITHUB_REPOSITORY }
+    $where = if ($fork) {
+        "This pull request comes from a fork, so the workflow runs there, once Actions are enabled in it, and the baseline is committed to its branch."
+    } else {
+        "Then commit it to this branch."
+    }
+
+    $text = @'
+
+
+### Was this change intended?
+
+Then accept it with a new baseline from this branch, made by `{workflow}` on the runner that compares:
+
+```bash
+gh workflow run {workflow} --repo {repository} --ref {branch}
+```
+
+A few seconds later, wait for it and take the file:
+
+```bash
+run=$(gh run list --repo {repository} --workflow {workflow} --branch {branch} --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId') &&
+gh run watch "$run" --repo {repository} &&
+gh run download "$run" --repo {repository} --name sonolint-baseline-{id} --dir sonolint-new &&
+mv sonolint-new/baseline.json {baseline} &&
+rmdir sonolint-new &&
+git diff {baseline}
+```
+
+{where} A baseline made with `sonolint baseline update` on your own machine only rewrites the section of its platform.
+'@
+    return $text.Replace('{workflow}', $workflow).Replace('{repository}', $repository).Replace('{branch}', $env:HEAD_REF).Replace('{id}', $id).Replace('{baseline}', $baselineFile).Replace('{where}', $where)
+}
+
 # Tells this run's artifact and comment apart from the other jobs of the workflow: by
 # default the plugin's file name and the platform, so a matrix or two plugins don't collide.
 $id = $env:INPUT_ID
@@ -57,13 +97,18 @@ elseif ($env:INPUT_MODE -eq 'run') {
         Set-Content -Encoding utf8 $report ("<!-- sonolint:report -->`n## Sonolint: $id`n`n**Sonolint didn't finish:** $why (exit code $code). " +
             "[The log]($runUrl) says more.")
     }
-    Get-Content -Raw $report | Add-Content $env:GITHUB_STEP_SUMMARY
-
     $results = Join-Path $out 'results.json'
     if (Test-Path $results) {
         $summary = (Get-Content -Raw $results | ConvertFrom-Json).summary
         Add-Content $env:GITHUB_OUTPUT "regressions=$($summary.regressed + $summary.changed)"
+
+        # In a pull request where something moved, how to accept it if that was the point.
+        if ($env:HEAD_REF -and ($summary.regressed + $summary.changed + $summary.improved + $summary.removed) -gt 0) {
+            Add-Content -Encoding utf8 $report (AcceptText $env:INPUT_BASELINE)
+        }
     }
+
+    Get-Content -Raw $report | Add-Content $env:GITHUB_STEP_SUMMARY
 }
 else {
     Write-Output "::error::mode must be run or baseline, not '$env:INPUT_MODE'"

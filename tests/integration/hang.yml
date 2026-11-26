@@ -1,0 +1,10 @@
+# With SONOLINT_FIXTURE_HANG_ON_LOAD set, the test plugin never finishes loading.
+version: 1
+
+defaults:
+  timeout_s: 1
+
+scenarios:
+  - id: never-loads
+    signal: { type: sine, freq_hz: 1000, level_dbfs: -6 }
+    metrics: [level]
