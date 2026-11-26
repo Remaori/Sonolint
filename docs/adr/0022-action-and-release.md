@@ -52,6 +52,14 @@ Decisions taken while writing `action.yml`, its scripts and the release workflow
   updates both. The examples in the documentation keep the tags, which are easier to read.
 - **`actionlint` checks the workflows in CI,** downloaded at a fixed version and checksum,
   with the `shellcheck` of the runner. It also checks how the workflows use `action.yml`.
+- **Each zip carries an attestation, and the Action verifies it** with
+  `gh attestation verify --signer-workflow <repository>/.github/workflows/release.yml`.
+  `SHA256SUMS` comes from the same release, so it catches a broken download but not a
+  replaced zip; the attestation, signed through GitHub's OIDC by the workflow that built
+  it, does. Any failure to verify fails the job, a network failure too, because running
+  an unproven executable is worse than a red build. `v0.1.0-rc.1` to `rc.3` came before
+  this and are named as the only exceptions; every later version, `v0.1.0` included,
+  must be attested. `binary` skips the download and so the check.
 - **The macOS zip is made with `zip`,** which keeps the executable bit; PowerShell's
   `Compress-Archive` would drop it. The Action sets the bit again anyway, since
   artifacts lose it too.

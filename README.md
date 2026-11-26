@@ -141,8 +141,7 @@ More in [ARCHITECTURE.md](docs/ARCHITECTURE.md) and the decision records in
 ## Roadmap
 
 - **v0.1.1:** the comment says how to accept a change of sound that was intended,
-  also for pull requests from forks; releases carry a build provenance attestation,
-  which the Action verifies when it downloads Sonolint.
+  also for pull requests from forks.
 - **v0.2, to be settled after this release:** null tests against reference WAV files,
   loudness (BS.1770-4) and static curves, intermodulation, tone bursts for attack and
   release, `sonolint init` to start a config from a plugin's parameters, parameter

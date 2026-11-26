@@ -1,5 +1,6 @@
 # Finds the sonolint executable for the Action: the one given in the `binary` input, or
-# the release for this runner, downloaded with gh and checked against SHA256SUMS.
+# the release for this runner, downloaded with gh and checked against SHA256SUMS and
+# against the attestation of the workflow that built it.
 # Writes its path as the step output `exe`.
 $ErrorActionPreference = 'Stop'
 
@@ -50,6 +51,16 @@ $expected = if ($line) { ($line -split '\s+')[0].ToLowerInvariant() } else { '' 
 $actual = (Get-FileHash -Algorithm SHA256 (Join-Path $folder $zip)).Hash.ToLowerInvariant()
 if (-not $expected) { Fail "SHA256SUMS of $version has no line for $zip" }
 if ($expected -ne $actual) { Fail "$zip doesn't match its checksum: expected $expected, got $actual" }
+
+# SHA256SUMS comes from the same release, so it can't tell a replaced zip. From v0.1.0 on
+# every zip has an attestation that release.yml in this repository built it; the first
+# pre-releases came before that and are the only ones let through without one. Any
+# failure stops here, a network one too: nothing unproven is run.
+$unattested = @('v0.1.0-rc.1', 'v0.1.0-rc.2', 'v0.1.0-rc.3')
+if ($unattested -notcontains $version) {
+    gh attestation verify (Join-Path $folder $zip) --repo $repository --signer-workflow "$repository/.github/workflows/release.yml"
+    if ($LASTEXITCODE -ne 0) { Fail "couldn't verify that release.yml in $repository built $zip, so it wasn't run" }
+}
 
 Expand-Archive -Path (Join-Path $folder $zip) -DestinationPath $folder -Force
 $exe = Join-Path $folder ($IsWindows ? 'sonolint.exe' : 'sonolint')

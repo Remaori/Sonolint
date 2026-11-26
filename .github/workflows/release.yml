@@ -1,6 +1,6 @@
 # Pushing a version tag (v0.1.0, or v0.1.0-rc.1 for a pre-release) builds Sonolint on
 # Windows and macOS and creates a *draft* GitHub Release with one zip per platform and
-# their SHA256SUMS. Nobody sees a draft until it is published by hand (docs/RELEASING.md).
+# their SHA256SUMS, each zip with an attestation of where it was built. Nobody sees a draft until it is published by hand (docs/RELEASING.md).
 # The tag pattern leaves out major tags such as v0, which major-tag.yml moves.
 name: Release
 
@@ -80,6 +80,10 @@ jobs:
     needs: notes
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write       # to sign the provenance of the zip
+      attestations: write   # to keep it on GitHub
 
     strategy:
       matrix:
@@ -118,6 +122,13 @@ jobs:
           else
             (cd package && zip -X "../dist/$name.zip" ./*)
           fi
+
+      # Proof that this workflow built the zip from this tag. The Action checks it before
+      # running what it downloads.
+      - name: Attest where the zip comes from
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: dist/*.zip
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
