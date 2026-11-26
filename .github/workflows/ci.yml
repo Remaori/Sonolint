@@ -246,7 +246,8 @@ jobs:
           if ($platforms.Count -ne 1) { throw "expected one platform, got: $platforms" }
           Write-Output "Baseline written for $platforms"
 
-  # The Action as people use it: a published release, downloaded, checked and run.
+  # The Action as people use it: a published release, downloaded, checked against its
+  # checksum and its attestation, and run.
   self-test-release:
     name: Action self-test with a published release (${{ matrix.os }})
     needs: [windows, macos]
@@ -277,7 +278,7 @@ jobs:
         id: run
         uses: ./
         with:
-          version: v0.1.0-rc.3
+          version: v0.1.0-rc.4
           id: release-${{ runner.os }}
           comment: 'false'
           plugin: self-test/tests/fixtures/SonolintFixture_artefacts/Release/VST3/SonolintFixture.vst3

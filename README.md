@@ -18,7 +18,7 @@ saturator, with its oversampling lowered from 4x to 2x. Halving oversampling cut
 
 ## Quick start
 
-Until v0.1.0 is out, use `@v0.1.0-rc.3` where the documentation says `@v0`.
+Until v0.1.0 is out, use `@v0.1.0-rc.4` where the documentation says `@v0`.
 
 1. **Say what to test** in a `sonolint.yml` at the root of your repository: signals,
    parameter values and the metrics to measure, with optional fixed limits
@@ -56,7 +56,7 @@ Until v0.1.0 is out, use `@v0.1.0-rc.3` where the documentation says `@v0`.
            with:
              name: MyPlugin-VST3
              path: build/vst3
-         - uses: Remaori/Sonolint@v0.1.0-rc.3
+         - uses: Remaori/Sonolint@v0.1.0-rc.4
            with:
              plugin: build/vst3/MyPlugin.vst3
    ```
