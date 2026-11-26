@@ -60,6 +60,7 @@ $unattested = @('v0.1.0-rc.1', 'v0.1.0-rc.2', 'v0.1.0-rc.3')
 if ($unattested -notcontains $version) {
     gh attestation verify (Join-Path $folder $zip) --repo $repository --signer-workflow "$repository/.github/workflows/release.yml"
     if ($LASTEXITCODE -ne 0) { Fail "couldn't verify that release.yml in $repository built $zip, so it wasn't run" }
+    Write-Output "Verified that release.yml in $repository built $zip"
 }
 
 Expand-Archive -Path (Join-Path $folder $zip) -DestinationPath $folder -Force
