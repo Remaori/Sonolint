@@ -84,7 +84,7 @@ They go in `defaults`, and any scenario can set its own.
 | `tail_ms` | number | 100 | Silence processed after the signal |
 | `non_realtime` | true or false | false | Tells the plugin it is rendering offline. Some plugins raise their quality then |
 | `analysis.skip_ms` | number | 100 | Left out at the start of each measured stretch |
-| `timeout_s` | number | 60 | A scenario that takes longer is reported as an error and the run stops |
+| `timeout_s` | number | 60 | A scenario that takes longer is reported as an error and the run stops. Loading the plugin may take as long as the longest scenario, or the run ends with exit code 3 |
 
 Sidechains and extra buses are switched off: only the main bus is used.
 

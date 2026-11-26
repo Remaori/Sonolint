@@ -1,5 +1,6 @@
-# Moves the major tag (v0) to the newest published release, pre-releases left out, so
-# workflows that use Remaori/Sonolint@v0 get it. Run by hand after publishing a release.
+# Moves the major tag (v0) to the highest published version, by number and never a
+# pre-release, so workflows that use Remaori/Sonolint@v0 get it. Run by hand after
+# publishing a release.
 name: Move the major tag
 
 on:
@@ -21,7 +22,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          tag=$(gh release list --exclude-drafts --exclude-pre-releases --limit 1 --json tagName --jq '.[0].tagName')
+          # By number: a fix for an older version can be published after a newer one.
+          tag=$(gh release list --exclude-drafts --exclude-pre-releases --limit 100 --json tagName --jq '.[].tagName' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
 
           if [ -z "$tag" ]; then
             echo "::error::There is no published release yet"

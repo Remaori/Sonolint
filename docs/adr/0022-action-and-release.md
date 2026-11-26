@@ -35,6 +35,14 @@ Decisions taken while writing `action.yml`, its scripts and the release workflow
   comment of an earlier push stays there, perhaps with everything passing, under a job
   that failed. It is an ordinary `report.md`, so the summary, the artifact and the
   comment need nothing special.
+- **The report says how to accept a change of sound,** with the commands filled in. The
+  Action adds it, not the binary, because it knows the branch, the workflow and the
+  artifact. The commands start the baseline workflow by hand (`workflow_dispatch`), as
+  committing the result stays with a person. From a fork, the comment can't be posted;
+  the job summary, which the contributor sees, says to run the workflow in the fork.
+- **`@v0` is the highest stable version by number,** never by date: a fix for an older
+  version may be published after a newer one, and by semver `0.1.1-rc.1` is above
+  `0.1.0`, so pre-releases are left out by name too.
 - **Any failure to comment is a warning,** not only a 403: the report is still in the
   job summary and the artifact, and the job's result is Sonolint's.
 - **The comment to edit is found by the marker at the start of its body**

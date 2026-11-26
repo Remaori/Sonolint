@@ -40,12 +40,13 @@ Each job keeps its own comment, and so does each plugin when a repository tests 
 | `plugin` | required | Path to the `.vst3` |
 | `config` | `sonolint.yml` | Path to the config |
 | `baseline` | `sonolint/baseline.json` | Path to the baseline |
-| `version` | the ref the Action is pinned to | The Sonolint release to download, such as `v0.1.0`. With `@v0`, the newest published `v0.x` release, pre-releases left out. Needed when you pin the Action by commit, which doesn't say a version |
+| `version` | the ref the Action is pinned to | The Sonolint release to download, such as `v0.1.0`. With `@v0`, the highest published `v0.x` version, pre-releases left out. Needed when you pin the Action by commit, which doesn't say a version |
 | `fail-on` | `regressions` | What fails the job: `regressions`, `assertions` or `none` ([CONFIG.md](CONFIG.md#running)) |
 | `comment` | `true` | Comment the report on the pull request |
 | `mode` | `run` | `run` measures and compares; `baseline` writes a new baseline (below) |
 | `github-token` | `${{ github.token }}` | Downloads the release and posts the comment |
 | `id` | the plugin's file name and the platform, such as `heft-windows-x64` | Tells this run apart from the others in the workflow: it names the artifact and the comment. Set it when two jobs test the same plugin on the same platform |
+| `baseline-workflow` | the workflow running the Action | The workflow file that makes the baseline, such as `sonolint-baseline.yml`, for the commands the comment gives to accept a change. It needs the `workflow_dispatch` trigger |
 | `binary` | none | Advanced, see below |
 
 ## Outputs
@@ -81,7 +82,9 @@ hang), the comment and the job summary say that instead of keeping an earlier re
 
 The baseline holds one section per platform, and its values must come from the same
 kind of runner the comparison runs on: the same `runs-on`, since another machine, CPU
-or image can move the last decimals. On a machine of your own you can run
+or image can move the last decimals. The workflow that makes it needs the
+`workflow_dispatch` trigger, so that it can be started by hand on any branch: the
+commands that the comment gives to accept a change start it that way. On a machine of your own you can run
 `sonolint baseline update` directly; for a CI runner, use `mode: baseline` in a workflow
 you start by hand:
 
@@ -111,7 +114,8 @@ commented in this mode.
 
 When a pull request changes the sound on purpose, Sonolint reports what moved and the
 job fails. To accept the change, make a new baseline from the pull request's branch,
-on the runner that compares, and commit it to that branch. In the Actions tab, run the
+on the runner that compares, and commit it to that branch. The comment gives these
+commands with the branch, the workflow (`baseline-workflow`) and the artifact filled in. In the Actions tab, run the
 baseline workflow on the branch and download its artifact; or, with the
 [GitHub CLI](https://cli.github.com/):
 
@@ -119,14 +123,15 @@ baseline workflow on the branch and download its artifact; or, with the
 gh workflow run sonolint-baseline.yml --ref my-branch
 ```
 
-A few seconds later, when the run has started, wait for it and take its file. The old
-one goes first, because `gh` doesn't overwrite files:
+A few seconds later, when the run has started, wait for it and take its file. `gh`
+doesn't overwrite files, so it goes to a folder of its own first:
 
 ```bash
-run=$(gh run list --workflow sonolint-baseline.yml --branch my-branch --limit 1 --json databaseId --jq '.[0].databaseId') &&
+run=$(gh run list --workflow sonolint-baseline.yml --branch my-branch --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId') &&
 gh run watch "$run" &&
-rm sonolint/baseline.json &&
-gh run download "$run" --name sonolint-baseline-myplugin-windows-x64 --dir sonolint &&
+gh run download "$run" --name sonolint-baseline-myplugin-windows-x64 --dir sonolint-new &&
+mv sonolint-new/baseline.json sonolint/baseline.json &&
+rmdir sonolint-new &&
 git diff sonolint/baseline.json
 ```
 

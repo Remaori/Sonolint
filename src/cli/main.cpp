@@ -19,11 +19,15 @@
 #include <juce_events/juce_events.h>
 
 #include <algorithm>
+#include <chrono>
+#include <condition_variable>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <mutex>
 #include <sstream>
+#include <thread>
 
 namespace
 {
@@ -120,6 +124,43 @@ std::vector<std::string> parseFormats (const std::string& text)
     return formats;
 }
 
+// A plugin that never returns while it loads would hang the run before the time limit of
+// any scenario applies. Past `seconds`, this says so and ends the process.
+class LoadDeadline
+{
+public:
+    LoadDeadline (double seconds, std::string pluginToName)
+        : thread ([this, seconds, plugin = std::move (pluginToName)]
+          {
+              std::unique_lock lock (mutex);
+
+              if (! done.wait_for (lock, std::chrono::duration<double> (seconds), [this] { return finished; }))
+              {
+                  std::cerr << "error: " << plugin << " didn't load in " << seconds << " s" << std::endl;
+                  std::_Exit (static_cast<int> (ErrorCode::pluginLoad));
+              }
+          })
+    {
+    }
+
+    ~LoadDeadline()
+    {
+        {
+            const std::lock_guard lock (mutex);
+            finished = true;
+        }
+
+        done.notify_all();
+        thread.join();
+    }
+
+private:
+    std::mutex mutex;
+    std::condition_variable done;
+    bool finished = false;
+    std::thread thread;   // last: it starts running in the constructor
+};
+
 // The scenarios of the config that match --filter, run on the plugin. What `run` and
 // `baseline update` share.
 json runConfig (const RunArgs& args, const sonolint::Config& config)
@@ -137,7 +178,14 @@ json runConfig (const RunArgs& args, const sonolint::Config& config)
     // The main thread acts as the message thread: plugins expect to be created on it.
     const juce::ScopedJuceInitialiser_GUI juceInit;
 
-    const auto plugin = sonolint::inspectPlugin (pluginPath, config.pluginName);
+    // As long as the longest scenario may take: then each render is watched by its own limit.
+    const auto longest = std::max_element (scenarios.begin(), scenarios.end(), [] (const auto& a, const auto& b) { return a.timeoutS < b.timeoutS; });
+    const auto plugin = [&]
+    {
+        const LoadDeadline deadline (longest->timeoutS, sonolint::toUtf8 (pluginPath));
+        return sonolint::inspectPlugin (pluginPath, config.pluginName);
+    }();
+
     sonolint::Vst3Renderer renderer (pluginPath, config.pluginName);
 
     sonolint::RunOptions options;

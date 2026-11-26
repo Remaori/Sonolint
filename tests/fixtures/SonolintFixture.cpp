@@ -42,6 +42,9 @@ public:
           nanAbove90 (addBool ("NanAbove90")),
           oscillate (addBool ("Oscillate"))
     {
+        // SONOLINT_FIXTURE_HANG_ON_LOAD never lets the plugin finish loading, to see what the host does then.
+        while (juce::SystemStats::getEnvironmentVariable ("SONOLINT_FIXTURE_HANG_ON_LOAD", {}).isNotEmpty())
+            juce::Thread::sleep (100);
     }
 
     bool isBusesLayoutSupported (const BusesLayout& layouts) const override

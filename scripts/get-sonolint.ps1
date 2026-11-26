@@ -29,11 +29,12 @@ if ($version -notmatch '^v\d') { Fail "can't tell which Sonolint to download fro
 
 $repository = if ($env:ACTION_REPOSITORY) { $env:ACTION_REPOSITORY } else { 'Remaori/Sonolint' }
 
-# A major tag (v0) means the newest published release of that major version.
+# A major tag (v0) means the highest published version of that major, by number and not
+# by date, and never a pre-release: by semver, 0.1.1-rc.1 is above 0.1.0.
 if ($version -match '^v\d+$') {
     $tags = gh release list --repo $repository --exclude-drafts --exclude-pre-releases --limit 100 --json tagName --jq '.[].tagName'
     if ($LASTEXITCODE -ne 0) { Fail "couldn't list the releases of $repository" }
-    $newest = @($tags) | Where-Object { $_ -like "$version.*" } | Select-Object -First 1
+    $newest = @($tags) | Where-Object { $_ -match "^$version\.\d+\.\d+$" } | Sort-Object { [version] $_.Substring(1) } -Descending | Select-Object -First 1
     if (-not $newest) { Fail "$repository has no published $version.x release yet" }
     $version = $newest
 }

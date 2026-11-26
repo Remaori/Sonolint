@@ -37,6 +37,12 @@ inputs:
       (sonolint-report-<id>, or sonolint-baseline-<id>) and the pull request comment. By
       default the plugin's file name and the platform, such as heft-windows-x64.
     default: ''
+  baseline-workflow:
+    description: >-
+      The workflow file that makes the baseline with mode baseline, such as
+      sonolint-baseline.yml, for the commands the comment gives to accept a change. By
+      default, the workflow running this. It needs the workflow_dispatch trigger.
+    default: ''
   binary:
     description: >-
       Advanced: a sonolint executable to use instead of downloading a release. Nothing
@@ -83,6 +89,10 @@ runs:
         INPUT_FAIL_ON: ${{ inputs.fail-on }}
         INPUT_MODE: ${{ inputs.mode }}
         INPUT_ID: ${{ inputs.id }}
+        INPUT_BASELINE_WORKFLOW: ${{ inputs.baseline-workflow }}
+        WORKFLOW_REF: ${{ github.workflow_ref }}
+        HEAD_REF: ${{ github.head_ref }}
+        HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
         COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         BASE_REF: ${{ github.base_ref }}
         ACTION_PATH: ${{ github.action_path }}

@@ -54,6 +54,6 @@ pre-release. If something doesn't match, there is no draft and the log says why.
 
 ## 5. Move the major tag (final releases only)
 
-In the Actions tab, run **Move the major tag**. It points `v0` at the newest published
-release, pre-releases left out, so workflows that use `Remaori/Sonolint@v0` get it. A
+In the Actions tab, run **Move the major tag**. It points `v0` at the highest published
+version, pre-releases left out, so workflows that use `Remaori/Sonolint@v0` get it. A
 pre-release is used by naming it: `Remaori/Sonolint@vx.y.z-rc.1`.
